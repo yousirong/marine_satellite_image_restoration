@@ -1,0 +1,66 @@
+1. Dataset : 1989~2018
+
+2. DayMOM : original data
+3. DaySST : Corrupted data
+
+4. test code
+<test code for sst>
+- python3 run.py --data_root data/test/west/sst/03 --mask_root data/test/west/mask/03 --result_save_path results/west/03 --model_path models/west/03/g_440000.pth --test --mask_mode 2
+- python3 run.py --data_root data/test/south/sst/06 --mask_root data/test/south/mask/06 --result_save_path results/south/06 --model_path models/south/06/g_440000.pth --test --mask_mode 2
+
+
+
+
+
+<test code for rrs>
+GOCI test
+- python3 run.py --data_root data/GOCI_RRS/Rrs_test/2021/gt/3_monthly/1 --mask_root data/GOCI_RRS/Rrs_test/2021/Rrs_mask/3/10 --result_save_path results/GOCI_RRS/1/10/ --model_path models/GOCI_RRS/3/g_770000.pth --test --mask_mode 2
+- python3 run.py --data_root data/GOCI_RRS/Rrs_test/2021/gt/1 --mask_root data/GOCI_RRS/Rrs_test/2021/Rrs_mask/1/10 --result_save_path results/GOCI_RRS/1/10 --model_path models/GOCI_RRS/1/g_740000.pth --test --mask_mode 2
+
+
+
+current===>  python3 run.py --data_root data/GOCI_RRS/Rrs_test/2021/gt/3 --mask_root data/GOCI_RRS/Rrs_test/2021/Rrs_mask/3/50 --result_save_path results/ay_rrs_goci/2021/3/50/ --model_path /home/pmilab/Desktop/RFR/models/test_models/3/g_550000.pth --test --mask_mode 2
+
+
+
+
+Modis test
+python3 run.py --data_root data/modis_rrs/test/gt --mask_root data/modis_rrs/test/mask/10 --result_save_path results/modis_rrs/10 --model_path models/modis_rrs/g_130000.pth --test --mask_mode 2
+
+current ===> python3 run.py --data_root data/modis_rrs/test/gt --mask_root data/modis_rrs/test/mask/50 --result_save_path results/ay_rrs_modis/2021/3/50 --model_path /home/pmilab/Desktop/RFR/models/ay_rrs/3/g_550000.pth --test --mask_mode 2
+
+
+
+
+- output image file need to be renamed. Please use rename_result.py
+
+
+5. train code
+<train code for SST>
+- python3 run.py --data_root data/train/west/03 --model_save_path models/west/03 --mask_mode 1 --batch_size 6 --gpu 0
+- python3 run.py --data_root data/train/sst/DayMOM_512px/01 --mask_root data/train/sst/DayMOM_mask_512px/01 --model_save_path models/sst_512px/01  --mask_mode 2 --batch_size 1 --gpu 0
+
+
+
+
+<train code for RRS!!>
+GOCI train
+- python3 run.py --data_root data/GOCI_RRS/train/Rrs/3 --mask_root data/GOCI_RRS/train/Rrs_mask/3 --model_save_path models/GOCI_RRS/3 --mask_mode 2 --batch_size 6 --gpu 0
+
+Modis train
+python3 run.py --data_root data/modis_rrs/train/gt --mask_root data/modis_rrs/train/mask --model_save_path models/modis_rrs --mask_mode 2 --batch_size 6 --gpu 0
+
+
+
+current ===>  python3 run.py --data_root data/GOCI_RRS/train/Rrs/2 --mask_root data/GOCI_RRS/train/Rrs_mask/2 --model_save_path models/ay_rrs/2 --mask_mode 2 --batch_size 6 --gpu 0 
+
+--model_path
+
+
+
+python3 = 3.6.9
+nvcc = 10.2 
+
+<train data>
+gt  : 2013-2018, 2020 0-0.3 loss
+mask : 2014, 2020 10-50 loss

@@ -1,0 +1,20 @@
+project_name: RFR
+exp_name: CHL_0to20_ver2
+notes: chl_4 resume
+
+data_root: /media/pmi/My Book/data/Chl-a/train/perfect
+mask_root: /media/pmi/My Book/data/mask/Train
+model_save_path: model/models/ust_chl_4
+model_path: model/models/ust_chl_4/g_195000.pth
+
+max_epochs: ~
+mask_mode: 0
+batch_size: 16
+target_size: 256
+num_iters: 800000
+n_threads: 6
+gpu_ids: [1]
+save_capacity: 50
+
+num_workers: 4
+warmup_batchs: 1500S

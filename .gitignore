@@ -1,0 +1,11 @@
+# logs
+logs
+
+# model result
+models
+performance
+results
+training
+preprocessing/LAT_LON
+preprocessing/Land_mask
+preprocessing/is_land_on_GOCI.npy

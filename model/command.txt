@@ -1,0 +1,9 @@
+current train command
+python3 model/run.py --data_root data/GOCI/train/chl --mask_root data/GOCI/train/mask --model_save_path model/models/chl_6 --mask_mode 2 --batch_size 6 --gpu 0
+python3 model/run.py --data_root data/GOCI/train/chl_only_range --mask_root data/GOCI/train/mask --model_save_path model/models/chl_only_range --mask_mode 2 --batch_size 6 --gpu 0
+
+
+current test command
+python3 model/run.py --data_root data/GOCI/test/chl --mask_root data/GOCI/test/mask/10 --result_save_path model/results/chl_6/160000/10 --model_path model/models/chl_6/g_1600000.pth --test --mask_mode 2
+python3 model/run.py --data_root data/GOCI/train/chl --mask_root /home/ubuntu/문서/AY_RFR/data/GOCI/train/mask_10 --result_save_path model/results/chl_6_train/1600000/10 --model_path model/models/chl_6/g_1600000.pth --test --mask_mode 2
+python3 model/run.py --data_root data/GOCI/test/chl_only_range --mask_root data/GOCI/test/mask/10 --result_save_path model/results/chl_only_range/100000/10 --model_path model/models/chl_only_range/g_100000.pth --test --mask_mode 2
