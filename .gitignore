@@ -9,3 +9,6 @@ training
 preprocessing/LAT_LON
 preprocessing/Land_mask
 preprocessing/is_land_on_GOCI.npy
+
+# anaconda.sh
+anaconda.sh
