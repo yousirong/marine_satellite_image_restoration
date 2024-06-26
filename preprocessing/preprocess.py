@@ -1,3 +1,4 @@
+# UST21 Chl-a 데이터의 전체 년도에 대한 정보 추출 및 전처리
 import h5py as h5
 import netCDF4 as nc
 import numpy as np
@@ -8,7 +9,7 @@ from tqdm import tqdm
 ########## path ##########
 data_base = '/media/ubuntu/My Book/UST21/Daily'
 save_base = '/media/ubuntu/My Book/Preprocessed/UST21/Chl-a'
-ocean_idx = np.load("/home/ubuntu/문서/AY_ust/preprocessing/ocean_idx_arr.npy")
+ocean_idx = np.load("/home/ubuntu/documents/AY_ust/preprocessing/ocean_idx_arr.npy")
 ##########################
 
 years = os.listdir(data_base)
@@ -18,13 +19,13 @@ pcts.append('perfect')
 
 if '2021_old' in years:
     years.remove('2021_old')
-    
+
 for phase in ['Train', 'Test']:
     for pct in pcts:
         temp = os.path.join(save_base, phase, pct)
         if not os.path.isdir(temp):
             os.makedirs(temp)
-    
+
 for year in years:
     print(year)
     phase = 'Train' if int(year)<2021 else 'Test'
@@ -48,7 +49,7 @@ for year in years:
                     for r in range(0, col, 256):
                         if idx in ocean_idx:
                             new_arr = np_a[k:k+256, r:r+256]
-                            
+
                             if new_arr.shape!=(256,256):
                                 continue
                             row_col = '_r' + str(k) + '_c' + str(r)
@@ -62,12 +63,12 @@ for year in years:
                             count = np.sum(nans) + np.sum(zeros) + np.sum(neg_outlier) +np.sum(pos_outlier)
 
                             #loss rate
-                            pct = count/(256*256) *10 
+                            pct = count/(256*256) *10
                             temp_pct = pct*10
                             pct = math.floor(pct)*10
-                            
+
                             #save file
-                            if pct == 100 : 
+                            if pct == 100 :
                                 continue
                             if temp_pct<.001:
                                 save_path = os.path.join(save_base, phase, 'perfect', img[:-7] + row_col+'.tiff')

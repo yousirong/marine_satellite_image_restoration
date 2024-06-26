@@ -1,18 +1,16 @@
-data_root: /media/pmi/My Book/data/Chl-a/test/perfect
+data_root: /media/juneyonglee/My Book/data/Chl-a/test/perfect
 # data_root: /media/pmi/My Book/data/Chl-a/ocean/0
-mask_root: /media/pmi/My Book/data/mask/Test/20
+mask_root: /media/juneyonglee/My Book/data/mask/Test/20
 model_save_path: ~
-model_path: model/models/ust_chl_4/g_1000000.pth
+model_path: model/models/ust_chl_4/g_1025000.pth
 
 max_epochs: ~
 mask_mode: 2
-batch_size: 12
+batch_size: 32
 target_size: 256
 num_iters: 800000
 n_threads: 6
-gpu_ids: [0]
+gpu_ids: [0, 1]
 
 num_workers: 2
 warmup_batchs: 1500
-
-

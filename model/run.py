@@ -21,8 +21,8 @@ def run():
     load_yaml(args, args.c)
     args = build_save_folder(args)
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"#args.gpu_ids
-    
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"#args.gpu_ids
+
     model = RFRNetModel()
 
     if args.test:
@@ -30,10 +30,10 @@ def run():
         model.cuda()
         dataloader = DataLoader(Dataset(args.data_root, args.mask_root, args.mask_mode, args.target_size, mask_reverse = False, training=False))
         model.test(dataloader, args.result_save_path)
-        
+
     elif args.val:
         validate(args.loss_rate, args.data_path, args.performance_save_path)
-        
+
     else:
         model.initialize_model(args.model_path, True, args.model_save_path, args.gpu_ids)
         model.cuda()

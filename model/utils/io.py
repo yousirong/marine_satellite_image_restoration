@@ -55,11 +55,14 @@ def build_save_folder(args):
             assert not os.path.isdir(args.model_save_path), "Please check model_save_path, it already exists. >> "+os.path.abspath(args.model_save_path)
             os.makedirs(args.model_save_path)
         config_save_path= os.path.join(args.model_save_path, os.path.basename(args.c) )
+
+        if not os.path.isdir(f'./model/training/{os.path.basename(args.model_save_path)}'):
+            os.makedirs(f'./model/training/{os.path.basename(args.model_save_path)}')
+        if not os.path.isdir(f'./model/models/{os.path.basename(args.model_save_path)}'):
+            os.makedirs(f'./model/models/{os.path.basename(args.model_save_path)}')
+
         shutil.copyfile(args.c, config_save_path)
 
-        if args.model_path is None:
-            assert not os.path.isdir(f'./model/training/{os.path.basename(args.model_save_path)}')
-            os.makedirs(f'./model/training/{os.path.basename(args.model_save_path)}')
 
     if args.test:
         directory, filename = os.path.split(args.model_path)
@@ -87,5 +90,5 @@ def build_save_folder(args):
         args.loss_rate = loss_rate
         if not os.path.isdir(args.performance_save_path):
             os.makedirs(args.performance_save_path)
-        
+
     return args

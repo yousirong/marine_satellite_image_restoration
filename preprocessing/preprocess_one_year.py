@@ -1,3 +1,4 @@
+# UST21 Chl-a 데이터의 특정 년도에 대한 정보 추출 및 전처리
 import h5py as h5
 import netCDF4 as nc
 import numpy as np
@@ -15,7 +16,7 @@ def check_pct(arr):
     assert np.sum(pos_outlier) <1
     count = np.sum(nans) + np.sum(zeros) + np.sum(neg_outlier) +np.sum(pos_outlier)
     #loss rate
-    pct = count/(256*256) *10 
+    pct = count/(256*256) *10
     temp_pct = pct*10
     pct = math.floor(pct)*10
     return temp_pct, pct
@@ -37,13 +38,13 @@ months = [f"{i:02}" for i in range(1, 13)]
 pcts= [str(i) for i in range(0, 100, 10)]
 pcts.append('perfect')
 
-    
+
 for phase in ['train', 'test', 'ocean']:
     for pct in pcts:
         temp = os.path.join(save_base, phase, pct)
         if not os.path.isdir(temp):
             os.makedirs(temp)
-        
+
 
 phase = 'train' if int(year)<2021 else 'test'
 data_year = os.path.join(data_base, year)
@@ -70,7 +71,7 @@ for month in tqdm(months):
             s_temp , s_pct = check_pct(s_patch)
             n_temp , n_pct = check_pct(n_patch)
 
-            if s_pct == 100 : 
+            if s_pct == 100 :
                 pass
             else:
                 if s_temp<1:
@@ -93,7 +94,7 @@ for month in tqdm(months):
                 for r in range(0, col, 256):
                     if idx in ocean_idx:
                         new_arr = np_a[k:k+256, r:r+256]
-                        
+
                         if new_arr.shape!=(256,256):
                             continue
                         row_col = '_r' + str(k) + '_c' + str(r)
@@ -102,7 +103,7 @@ for month in tqdm(months):
                         temp_pct, pct = check_pct(new_arr)
 
                         #save file
-                        if pct == 100 : 
+                        if pct == 100 :
                             continue
                         if temp_pct<1:
                             save_path = os.path.join(save_base, phase, 'perfect', img[:-3] + row_col+'.tiff')
