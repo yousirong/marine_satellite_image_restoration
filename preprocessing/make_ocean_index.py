@@ -4,8 +4,8 @@ import netCDF4 as nc
 import numpy as np
 
 
-mat_file = io.loadmat('/home/ubuntu/문서/AY_ust/preprocessing/Land_mask/Land_mask.mat')
-save_file = '/home/ubuntu/문서/AY_ust/preprocessing/ocean_idx_arr.npy'
+mat_file = io.loadmat('/home/juneyonglee/Documents/AY_ust/preprocessing/Land_mask/Land_mask.mat')
+save_file = '/home/juneyonglee/Documents/AY_ust/preprocessing/ocean_idx_arr.npy'
 mask = mat_file['Land']
 
 image_size = mask.shape

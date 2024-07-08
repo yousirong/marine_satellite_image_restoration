@@ -15,4 +15,4 @@ anaconda.sh
 
 #
 *.run
-model/__pycache__/*.pyc
+model/__pycache__/*.cpython-39.pyc

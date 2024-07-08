@@ -1,5 +1,4 @@
 # UST21 Chl-a 데이터의 특정 년도에 대한 정보 추출 및 전처리
-import h5py as h5
 import netCDF4 as nc
 import numpy as np
 import os
@@ -23,10 +22,10 @@ def check_pct(arr):
 
 
 ########## path ##########
-data_base = '/media/ubuntu/My Book/UST21/Daily'
-save_base = '/media/ubuntu/My Book/data/Chl-a'
-ocean_base = '/media/ubuntu/My Book/data/Chl-a/ocean'
-ocean_idx = np.load("/home/ubuntu/문서/AY_ust/preprocessing/ocean_idx_arr.npy")
+data_base = '/media/juneyonglee/My Book/UST21/Daily/'
+save_base = '/media/juneyonglee/My Book/data/Chl-a_example'
+ocean_base = '/media/juneyonglee/My Book/data/Chl-a/ocean'
+ocean_idx = np.load("/home/juneyonglee/Documents/AY_ust/preprocessing/ocean_idx_arr.npy")
 ######### point #########
 x_nak, y_nak = (3377, 3664)
 x_sae, y_sae = (3751, 4629)
@@ -34,6 +33,9 @@ x_sae, y_sae = (3751, 4629)
 
 
 year = str(input())
+print(year)
+if not year.isdigit() or not (2012 <= int(year) <= 2020):  # 연도 범위는 필요에 따라 조정하세요
+    raise ValueError("Please enter a valid year between 2012 and 2020.")
 months = [f"{i:02}" for i in range(1, 13)]
 pcts= [str(i) for i in range(0, 100, 10)]
 pcts.append('perfect')
