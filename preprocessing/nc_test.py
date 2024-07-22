@@ -1,5 +1,5 @@
 # UST21 Chl-a 데이터의 전체 년도에 대한 정보 추출 및 전처리
-import h5py as h5
+# import h5py as h5
 import netCDF4 as nc
 import numpy as np
 import os
@@ -8,9 +8,9 @@ import math
 from tqdm import tqdm
 
 ########## path ##########
-data_base = '/media/juneyonglee/My Book/UST21/Daily/2021_old'
+data_base = '/media/juneyonglee/My Book/UST21/Daily/'
 save_base = '/media/juneyonglee/My Book/Preprocessed/UST21/Chl-a_example_all'
-ocean_idx = np.load("/home/juneyonglee/Documents/AY_ust/preprocessing/ocean_idx_arr.npy")
+ocean_idx = np.load("/home/juneyonglee/Desktop/AY_ust/preprocessing/ocean_idx_arr.npy")
 ##########################
 
 years = os.listdir(data_base)
