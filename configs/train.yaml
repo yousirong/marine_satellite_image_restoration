@@ -5,7 +5,7 @@ notes: chl_1
 data_root: /media/juneyonglee/My Book/data/Chl-a/train/perfect
 mask_root: /media/juneyonglee/My Book/data/mask/Train
 model_save_path: model/models/ust_chl_3
-model_path: model/models/ust_chl_3/g_62000.pth
+model_path: model/models/ust_chl_3/g_83500.pth
 
 max_epochs: ~
 mask_mode: 0
