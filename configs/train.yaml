@@ -4,8 +4,9 @@ notes: chl_1
 
 data_root: /media/juneyonglee/My Book/data/Chl-a/train/perfect
 mask_root: /media/juneyonglee/My Book/data/mask/Train
-model_save_path: model/models/ust_chl_3
-model_path: model/models/ust_chl_3/g_83500.pth
+# model_save_path: model/models/ust_chl_4
+model_save_path: /home/juneyonglee/MyData/backup_20240722/AY_ust/model/models/ust_chl_4
+model_path: model/models/ust_chl_4/g_466700.pth
 
 max_epochs: ~
 mask_mode: 0
@@ -14,7 +15,7 @@ target_size: 256
 num_iters: 800000
 n_threads: 6
 gpu_ids: [0, 1]
-save_capacity: 20
+save_capacity: 10
 
 num_workers: 2
 warmup_batchs: 1500S
