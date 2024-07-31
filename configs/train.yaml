@@ -6,11 +6,11 @@ data_root: /media/juneyonglee/My Book/data/Chl-a/train/perfect
 mask_root: /media/juneyonglee/My Book/data/mask/Train
 # model_save_path: model/models/ust_chl_4
 model_save_path: /home/juneyonglee/MyData/backup_20240722/AY_ust/model/models/ust_chl_4
-model_path: model/models/ust_chl_4/g_466700.pth
+model_path: model/models/ust_chl_4/g_600000.pth
 
 max_epochs: ~
 mask_mode: 0
-batch_size: 32
+batch_size: 16
 target_size: 256
 num_iters: 800000
 n_threads: 6
