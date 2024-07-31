@@ -208,6 +208,6 @@ def validate(loss_rate, data_path, save_path):
                 true=plt_gt,
                 pred=plt_res,
                 rmse_=math.sqrt(temp_rmse/cloud_count),
-                mape_= temp_mape/cloud_count,
+                mape_= temp_mape/cloud_count*100,
                 title=f"Loss {loss_rate}-{int(loss_rate)+9}%",           
     )

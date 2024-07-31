@@ -15,7 +15,7 @@ target_size: 256
 num_iters: 800000
 n_threads: 6
 gpu_ids: [0, 1]
-save_capacity: 10
+save_capacity: 5
 
 num_workers: 2
 warmup_batchs: 1500S

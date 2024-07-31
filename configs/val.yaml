@@ -2,5 +2,5 @@ project_name: RFR
 exp_name: CHL_only_range2
 notes: 0~20 in range, else outlier
 
-data_path: model/results/ust_chl_4_0/1000000/10
+data_path: model/results/ust_chl_4_0/600000/10
 save_path: model/performance
