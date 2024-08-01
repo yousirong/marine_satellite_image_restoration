@@ -4,7 +4,6 @@ from utils.io import load_ckpt
 from utils.io import save_ckpt
 from utils.io import is_available_to_store
 from torchvision import transforms
-from torchvision.utils import make_grid
 from torchvision.utils import save_image
 from modules.RFRNet import RFRNet, VGG16FeatureExtractor
 import os
@@ -14,7 +13,8 @@ import cv2
 import numpy as np
 from PIL import Image
 import torch.nn as nn
-class RFRNetModel():
+
+class RFRNetModel_withvalidation():
     def __init__(self):
         self.G = None
         self.lossNet = None
@@ -41,8 +41,8 @@ class RFRNetModel():
         if train:
             self.writer = SummaryWriter(os.path.join("logs", os.path.basename(model_save_path)))
 
-        if train:
-            self.lossNet = VGG16FeatureExtractor()
+        self.lossNet = VGG16FeatureExtractor()
+        
         try:
             start_iter = load_ckpt(path, [('generator', self.G)], [('optimizer_G', self.optm_G)])
             if train:
@@ -129,6 +129,8 @@ class RFRNetModel():
             save_ckpt('{:s}/g_{:s}.pth'.format(save_path, "final"), [('generator', self.G)], [('optimizer_G', self.optm_G)], self.iter)
 
     def validate(self, val_loader):
+        if self.lossNet is None:
+            raise ValueError("lossNet is not initialized.")
         self.G.eval()
         val_loss = 0.0
         with torch.no_grad():
@@ -224,6 +226,8 @@ class RFRNetModel():
         real_B = self.real_B
         fake_B = self.fake_B
         comp_B = self.comp_B
+        if self.lossNet is None:
+            raise ValueError("lossNet is not initialized.")
         real_B_feats = self.lossNet(real_B)
         fake_B_feats = self.lossNet(fake_B)
         comp_B_feats = self.lossNet(comp_B)

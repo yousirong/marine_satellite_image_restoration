@@ -93,7 +93,7 @@ def plot_parity(filename, loss_rate,true, pred, rmse_, mape_, kind="scatter",
 
         ax.text(text_pos_x, text_pos_y, f"RMSE = {rmse:.8f}", 
                 transform=ax.transAxes, fontdict=font_metrics, ha=ha)
-        ax.text(text_pos_x, text_pos_y-0.1, f"MAPE = {mape:.8f}", 
+        ax.text(text_pos_x, text_pos_y-0.1, f"MAE = {mape:.8f}", 
                 transform=ax.transAxes, fontdict=font_metrics, ha=ha)
         ax.text(text_pos_x, text_pos_y-0.2, f"R2 = {r2:.3f}", 
                 transform=ax.transAxes, fontdict=font_metrics, ha=ha)
@@ -208,6 +208,6 @@ def validate(loss_rate, data_path, save_path):
                 true=plt_gt,
                 pred=plt_res,
                 rmse_=math.sqrt(temp_rmse/cloud_count),
-                mape_= temp_mape/cloud_count*100,
+                mape_= temp_mape/cloud_count,
                 title=f"Loss {loss_rate}-{int(loss_rate)+9}%",           
     )

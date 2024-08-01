@@ -11,7 +11,7 @@ import random
 from sklearn.metrics import r2_score as r2_
 
 
-def plot_parity(filename, loss_rate,true, pred, rmse_, mae_, kind="scatter", 
+def plot_parity(filename, loss_rate,true, pred, rmse_, mape_, kind="scatter", 
                 xlabel="true", ylabel="predict", title="Loss 50-60%", 
                 hist2d_kws=None, scatter_kws=None, kde_kws=None,
                 equal=True, metrics=True, metrics_position="lower right",
@@ -74,7 +74,7 @@ def plot_parity(filename, loss_rate,true, pred, rmse_, mae_, kind="scatter",
         #mae = mean_absolute_error(true, pred)
         #r2 = r2_score(true, pred)
         rmse = rmse_
-        mae = mae_
+        mape = mape_
         r2 = r2_(true, pred)
         #r2 = r2_
         font_metrics = {'color':'k', 'fontsize':14}
@@ -93,7 +93,7 @@ def plot_parity(filename, loss_rate,true, pred, rmse_, mae_, kind="scatter",
 
         ax.text(text_pos_x, text_pos_y, f"RMSE = {rmse:.8f}", 
                 transform=ax.transAxes, fontdict=font_metrics, ha=ha)
-        ax.text(text_pos_x, text_pos_y-0.1, f"MAE = {mae:.8f}", 
+        ax.text(text_pos_x, text_pos_y-0.1, f"MAPE = {mape:.8f}", 
                 transform=ax.transAxes, fontdict=font_metrics, ha=ha)
         ax.text(text_pos_x, text_pos_y-0.2, f"R2 = {r2:.3f}", 
                 transform=ax.transAxes, fontdict=font_metrics, ha=ha)
@@ -103,6 +103,8 @@ def plot_parity(filename, loss_rate,true, pred, rmse_, mae_, kind="scatter",
     fig.tight_layout()
     if save_file:
         fig.savefig(filename+f'/{loss_rate}.png')
+    else:
+        print("check save file path, saving failed@@")
     plt.show()
     return ax
 
@@ -141,7 +143,7 @@ def validate(loss_rate, data_path, save_path):
     with warnings.catch_warnings():
         warnings.filterwarnings('error')
         for i in trange(len(recon_files_list)):
-            
+        # for i in trange(10):
             recon_parts = recon_files_list[i].split('/')
             recon_file_name = recon_parts[-1] 
             mask_parts = mask_files_list[i].split('/')
@@ -188,7 +190,7 @@ def validate(loss_rate, data_path, save_path):
                         if math.isinf(loss) or math.isnan(gt_np[w, h]) or math.isnan(restored_np[w, h]): 
                             continue
 
-                        temp_mae = temp_mae + abs(gt_np[w, h]-restored_np[w, h])
+                        temp_mape = temp_mape + abs(gt_np[w, h]-restored_np[w, h])
                         #temp_mse = temp_mse + (gt_np[i,j]-restored_np[i,j])**2
                         temp_rmse = temp_rmse + (gt_np[w, h]-restored_np[w, h])**2
                         #temp_rmspe = temp_rmspe + loss**2
@@ -206,6 +208,6 @@ def validate(loss_rate, data_path, save_path):
                 true=plt_gt,
                 pred=plt_res,
                 rmse_=math.sqrt(temp_rmse/cloud_count),
-                mae_= temp_mae/cloud_count,
-                title=f"Loss {str(loss_rate)}-{loss_rate+9}%",           
+                mape_= temp_mape/cloud_count*100,
+                title=f"Loss {loss_rate}-{int(loss_rate)+9}%",           
     )
