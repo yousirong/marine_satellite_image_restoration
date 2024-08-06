@@ -1,6 +1,6 @@
 data_root: /media/juneyonglee/My Book/data/Chl-a/test/perfect
 # data_root: /media/pmi/My Book/data/Chl-a/ocean/0
-mask_root: /media/juneyonglee/My Book/data/mask/Test/50
+mask_root: /media/juneyonglee/My Book/data/mask/Test/10
 model_save_path: ~
 model_path: model/models/ust_chl_4/g_600000.pth
 

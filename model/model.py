@@ -140,9 +140,6 @@ class RFRNetModel():
                         save_ckpt('{:s}/g_{:d}.pth'.format(save_path, self.iter ), [('generator', self.G)], [('optimizer_G', self.optm_G)], self.iter)
                     else:
                         exit()
-        if not os.path.exists('{:s}'.format(save_path)):
-            os.makedirs('{:s}'.format(save_path))
-            save_ckpt('{:s}/g_{:s}.pth'.format(save_path, "final"), [('generator', self.G)], [('optimizer_G', self.optm_G)], self.iter)
     def test(self, test_loader, result_save_path):
         self.G.eval()
         #print("++++checkintpoint1++++")

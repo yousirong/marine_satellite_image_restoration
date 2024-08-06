@@ -24,7 +24,8 @@ class Dataset(torch.utils.data.Dataset):
         self.mask_data = self.load_list(mask_path)
         #self.mask_data =self.mask_data[:216]
         print(len(self.mask_data))
-        self.target_size = target_size
+        self.target_size = target_size if isinstance(target_size, int) else target_size[0]
+        self.mask_type = mask_mode
         self.mask_type = mask_mode
         self.mask_reverse = mask_reverse
 
@@ -138,14 +139,12 @@ class Dataset(torch.utils.data.Dataset):
                 return mask
            
 
-    def resize(self, img, aspect_ratio_kept = True, fixed_size = False, centerCrop=False):
-        
+    def resize(self, img, aspect_ratio_kept=True, fixed_size=False, centerCrop=False):
         if aspect_ratio_kept:
             imgh, imgw = img.shape[0:2]
             side = np.minimum(imgh, imgw)
             if fixed_size:
                 if centerCrop:
-                # center crop
                     j = (imgh - side) // 2
                     i = (imgw - side) // 2
                     img = img[j:j + side, i:i + side, ...]
@@ -169,7 +168,7 @@ class Dataset(torch.utils.data.Dataset):
                         h_start = random.randrange(0, j)
                     if i != 0:
                         w_start = random.randrange(0, i)
-                    img = img[h_start:h_start + side, w_start:w_start + side, ...]
+                    img = img[h_start:h_start + side, w_start + w_start + side, ...]
                 else:
                     side = random.randrange(self.target_size, side)
                     j = (imgh - side)
@@ -177,7 +176,6 @@ class Dataset(torch.utils.data.Dataset):
                     h_start = random.randrange(0, j)
                     w_start = random.randrange(0, i)
                     img = img[h_start:h_start + side, w_start:w_start + side, ...]
-        # img = scipy.misc.imresize(img, [self.target_size, self.target_size])
         img = np.array(Image.fromarray(img).resize(size=(self.target_size, self.target_size)))
         return img
 
