@@ -7,8 +7,8 @@ import math
 from tqdm import tqdm
 
 ########## path ##########
-data_base = '/media/juneyonglee/My Book/UST21/Daily/'
-save_base = '/media/juneyonglee/My Book/Preprocessed/UST21/Chl-a_example_all'
+data_base = '/media/juneyonglee/My Book/MODIS/MODIS-Aqua/OC'
+save_base = '/media/juneyonglee/My Book/Preprocessed/MODIS/Chl-a'
 ocean_idx = np.load("/home/juneyonglee/Desktop/AY_ust/preprocessing/ocean_idx_arr.npy", allow_pickle=True)
 ##########################
 
