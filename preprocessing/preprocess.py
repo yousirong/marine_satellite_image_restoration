@@ -7,13 +7,14 @@ import math
 from tqdm import tqdm
 
 ########## path ##########
-data_base = '/media/juneyonglee/My Book/MODIS/MODIS-Aqua/OC'
-save_base = '/media/juneyonglee/My Book/Preprocessed/MODIS/Chl-a'
+data_base = '/media/juneyonglee/My Book/UST21/Daily'
+save_base = '/media/juneyonglee/My Book/Preprocessed/UST/Chl-a_example'
 ocean_idx = np.load("/home/juneyonglee/Desktop/AY_ust/preprocessing/ocean_idx_arr.npy", allow_pickle=True)
 ##########################
 
 years = os.listdir(data_base)
 months = [f"{i:02}" for i in range(1, 13)]
+# days = [f"{i:02}" for i in range(1, 32)]
 pcts = [str(i) for i in range(0, 100, 10)]
 pcts.append('perfect')
 

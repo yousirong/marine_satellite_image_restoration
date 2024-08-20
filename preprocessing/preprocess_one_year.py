@@ -22,8 +22,8 @@ def check_pct(arr):
 
 
 ########## path ##########
-data_base = '/media/juneyonglee/My Book/UST21/Daily/'
-save_base = '/media/juneyonglee/My Book/Preprocessed/UST21/Chl-a_example'
+data_base = '/media/juneyonglee/My Book/UST21/Daily'
+save_base = '/media/juneyonglee/My Book/Preprocessed/UST/Chl-a_example'
 ocean_base = '/media/juneyonglee/My Book/Preprocessed/UST21/Chl-a/ocean'
 ocean_idx = np.load("/home/juneyonglee/Desktop/AY_ust/preprocessing/ocean_idx_arr.npy")
 ######### point #########

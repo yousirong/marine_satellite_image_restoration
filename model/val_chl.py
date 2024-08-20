@@ -157,10 +157,12 @@ def validate(loss_rate, data_path, save_path):
             selected_mask = mask_files_list[i]
             selected_gt = gt_files_list[i]
             restored_np = np.loadtxt(selected_recon, delimiter=',',dtype='float32')
-            restored_np = restored_np/255.0
+            # raw pixel 값 그대로 사용하려면 주석처리 
+            # restored_np = restored_np/255.0
             mask = np.loadtxt(selected_mask, delimiter=',',dtype='float32')
             gt_np = np.loadtxt(selected_gt, delimiter=',',dtype='float32')
-            gt_np = gt_np/255.0
+            # raw pixel 값 그대로 사용하려면 주석처리 
+            # gt_np = gt_np/255.0
 
             W = gt_np.shape[0]
             H = gt_np.shape[0]
