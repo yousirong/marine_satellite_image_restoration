@@ -21,14 +21,17 @@ def run():
     load_yaml(args, args.c)
     args = build_save_folder(args)
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"#args.gpu_ids
+    # GPU 설정
+    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, args.gpu_ids))  # args.gpu_ids를 이용해 CUDA_VISIBLE_DEVICES 설정
 
     model = RFRNetModel()
 
     if args.test:
         model.initialize_model(args.model_path, False, None, args.gpu_ids)
         model.cuda()
-        dataloader = DataLoader(Dataset(args.data_root, args.mask_root, args.mask_mode, args.target_size, mask_reverse = False, training=False))
+        dataloader = DataLoader(Dataset(args.data_root, args.mask_root, args.mask_mode, args.target_size, mask_reverse=False, training=False), 
+                                batch_size=args.batch_size, 
+                                num_workers=args.n_threads)  # num_workers 설정
         model.test(dataloader, args.result_save_path)
 
     elif args.val:
@@ -37,7 +40,10 @@ def run():
     else:
         model.initialize_model(args.model_path, True, args.model_save_path, args.gpu_ids)
         model.cuda()
-        dataloader = DataLoader(Dataset(args.data_root, args.mask_root, args.mask_mode, args.target_size, mask_reverse = False), batch_size = args.batch_size, shuffle = True, num_workers = args.n_threads)
+        dataloader = DataLoader(Dataset(args.data_root, args.mask_root, args.mask_mode, args.target_size, mask_reverse=False), 
+                                batch_size=args.batch_size, 
+                                shuffle=True, 
+                                num_workers=args.n_threads)  # num_workers 설정
         model.train(dataloader, args.model_save_path, args.save_capacity, args.finetune, args.num_iters)
 
 if __name__ == '__main__':
