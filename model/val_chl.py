@@ -6,9 +6,15 @@ import math
 from matplotlib import pyplot as plt
 import seaborn as sns
 import warnings
-from tqdm import trange, tqdm
-import random
+from tqdm import trange
 from sklearn.metrics import r2_score as r2_
+from matplotlib import cm
+from matplotlib.colors import Normalize
+import re
+
+def natural_sort_key(s):
+    # 파일 이름에서 숫자 부분만 추출하여 정렬 키로 사용
+    return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
 
 
 def plot_parity(filename, loss_rate, true, pred, rmse_, mape_, kind="scatter", 
@@ -102,20 +108,48 @@ def plot_parity(filename, loss_rate, true, pred, rmse_, mape_, kind="scatter",
     plt.show()
     return ax
 
+def save_colormap_image(data, save_path):
+    # Normalize 객체를 사용하여 값의 범위를 설정
+    norm = Normalize()
+
+    # viridis 컬러맵을 사용하여 그레이스케일 이미지를 컬러 이미지로 변환
+    colormap = cm.ScalarMappable(norm=norm, cmap='viridis')
+    colored_img = colormap.to_rgba(data)[:, :, :3]  # RGB 값만 사용 (A 값은 생략)
+
+    # 확장자를 명시적으로 추가하여 이미지 저장
+    save_path_with_extension = save_path if save_path.lower().endswith('.png') else save_path + '.png'
+    plt.imsave(save_path_with_extension, colored_img)
+
+    # 추가된 결과 확인 및 저장
+    plt.imshow(data, cmap='viridis')
+    plt.colorbar(label='Chlorophyll-a concentration (mg/m³)')
+    plt.title(f'Restored Chlorophyll-a Concentration')
+    plt.savefig(save_path_with_extension.replace('.png', '_bar.png'), dpi=300)  # 컬러바가 포함된 이미지 저장
+    plt.close()
 
 def validate(loss_rate, data_path, save_path):
 
     ####path
-    recon_path = os.path.join(data_path, 'recon')    #goci_path ==> recon
-    gt_path = os.path.join(data_path, 'gt')           #modis_path => gt
-    mask_path = os.path.join(data_path, 'mask')   #mask
+    recon_path = os.path.join(data_path, 'recon')
+    gt_path = os.path.join(data_path, 'gt')
+    mask_path = os.path.join(data_path, 'mask')
     assert os.path.isdir(recon_path) and os.path.isdir(gt_path) and os.path.isdir(mask_path), "Please check dataset path is valid"
     
+    # color_images 저장 경로 설정
+    color_image_path = os.path.join(save_path, f'color_{loss_rate}')
+    if not os.path.exists(color_image_path):
+        os.makedirs(color_image_path)
 
     ####files list
-    gt_files_list = sorted(list(glob.glob(os.path.join(gt_path, '*'), recursive=True)))
-    recon_files_list = sorted(list(glob.glob(os.path.join(recon_path, '*'), recursive=True)))
-    mask_files_list = sorted(list(glob.glob(os.path.join(mask_path, '*'), recursive=True)))
+    recon_files_list = sorted(glob.glob(os.path.join(recon_path, '*')), key=natural_sort_key)
+    gt_files_list = sorted(glob.glob(os.path.join(gt_path, '*')), key=natural_sort_key)
+    mask_files_list = sorted(glob.glob(os.path.join(mask_path, '*')), key=natural_sort_key)
+    
+    # 이미지 파일이 없을 경우 처리
+    if len(recon_files_list) == 0 or len(gt_files_list) == 0 or len(mask_files_list) == 0:
+        print("No image files found in the specified paths.")
+        return
+    
     print("len(gt_files_list):", len(gt_files_list))
     print("len(recon_files_list):", len(recon_files_list))
     print("len(mask_files_list):", len(mask_files_list))
@@ -137,9 +171,9 @@ def validate(loss_rate, data_path, save_path):
             gt_file_name = os.path.basename(gt_files_list[i])
 
             restored_np = np.loadtxt(recon_files_list[i], delimiter=',', dtype='float32')
+            #정규화 하려면 restored_np /=255.0 gt_np /= 255.0
             mask = np.loadtxt(mask_files_list[i], delimiter=',', dtype='float32')
             gt_np = np.loadtxt(gt_files_list[i], delimiter=',', dtype='float32')
-
             W, H = gt_np.shape
 
             for w in range(W):
@@ -168,14 +202,22 @@ def validate(loss_rate, data_path, save_path):
                         temp_rmse += (gt_np[w, h] - restored_np[w, h]) ** 2
                         cloud_count += 1
 
+            # 컬러 이미지로 변환하여 저장 (color_images 폴더 내에 저장)
+            save_colormap_image(restored_np, os.path.join(color_image_path, recon_file_name))
+
     plt_gt = np.array(plt_gt)
     plt_res = np.array(plt_res)
+
+    # 값이 없을 경우 대비 처리
+    if cloud_count == 0:
+        print("No valid data found for plotting.")
+        return
 
     plot_parity(filename=save_path,
                 loss_rate=loss_rate,
                 true=plt_gt,
                 pred=plt_res,
-                rmse_=math.sqrt(temp_rmse / cloud_count),
-                mape_=temp_mape / cloud_count,
+                rmse_=math.sqrt(temp_rmse / cloud_count) if cloud_count > 0 else float('nan'),
+                mape_=temp_mape / cloud_count if cloud_count > 0 else float('nan'),
                 title=f"Loss {loss_rate}-{int(loss_rate)+9}%"
     )
