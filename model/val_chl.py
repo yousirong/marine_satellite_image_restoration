@@ -109,23 +109,31 @@ def plot_parity(filename, loss_rate, true, pred, rmse_, mape_, kind="scatter",
     return ax
 
 def save_colormap_image(data, save_path):
-    # Normalize 객체를 사용하여 값의 범위를 설정
+    # Normalize the data to be between 0 and 20
+    # norm = Normalize(vmin=0, vmax=20)
     norm = Normalize()
 
-    # viridis 컬러맵을 사용하여 그레이스케일 이미지를 컬러 이미지로 변환
+    # Use the viridis colormap to map the grayscale image to a color image
     colormap = cm.ScalarMappable(norm=norm, cmap='viridis')
-    colored_img = colormap.to_rgba(data)[:, :, :3]  # RGB 값만 사용 (A 값은 생략)
+    colored_img = colormap.to_rgba(data)[:, :, :3]  # Use only RGB values (omit A value)
 
-    # 확장자를 명시적으로 추가하여 이미지 저장
+    # Ensure the save path has the correct extension
     save_path_with_extension = save_path if save_path.lower().endswith('.png') else save_path + '.png'
     plt.imsave(save_path_with_extension, colored_img)
 
-    # 추가된 결과 확인 및 저장
-    plt.imshow(data, cmap='viridis')
+    # Display the image with the updated color bar
+    plt.imshow(data, cmap='viridis', norm=norm)
     plt.colorbar(label='Chlorophyll-a concentration (mg/m³)')
     plt.title(f'Restored Chlorophyll-a Concentration')
-    plt.savefig(save_path_with_extension.replace('.png', '_bar.png'), dpi=300)  # 컬러바가 포함된 이미지 저장
+
+    # Remove the axis ticks and labels
+    plt.xticks([])
+    plt.yticks([])
+    
+    # Save the image with the color bar
+    plt.savefig(save_path_with_extension.replace('.png', '_bar.png'), dpi=300, bbox_inches='tight')
     plt.close()
+
 
 def validate(loss_rate, data_path, save_path):
 
