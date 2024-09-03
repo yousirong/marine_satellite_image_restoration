@@ -49,7 +49,7 @@ def landorocean(lat, lon):
 img_path = '/media/juneyonglee/My Book/VIIRS/VIIRS-SNPP/OC'
 save_path = '/media/juneyonglee/My Book/Preprocessed/VIIRS'
 
-satellite_type = "VIIRS"  # set satellite_type(GOCI, GOCI-II, ...)
+satellite_type = "GOCI-II"  # set satellite_type(GOCI, GOCI-II, ...)
 
 data_type = 'RRS'  # set data_type(RRS, CHL, ...)
 
