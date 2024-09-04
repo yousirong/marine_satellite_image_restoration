@@ -5,16 +5,15 @@ import cv2
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.colors import Normalize
-import seaborn as sns
-import re
 from tqdm import trange
+import re
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
 
 def calculate_pixel_difference(image1, image2):
     # Calculate the difference between the two images
-    diff = image2 - image1
+    diff = image2.astype(np.float32) - image1.astype(np.float32)
     return diff
 
 def normalize_and_apply_colormap(data, vmin=-20, vmax=20, cmap='coolwarm'):
@@ -46,7 +45,11 @@ def save_difference_image(diff, save_path):
     plt.close()
 
 def process_images(recon_path, save_path):
-    recon_files_list = sorted(glob.glob(os.path.join(recon_path, '*')), key=natural_sort_key)
+    # Get list of files and exclude those with '_bar' in their names
+    recon_files_list = sorted(
+        [f for f in glob.glob(os.path.join(recon_path, '*')) if '_bar' not in os.path.basename(f)], 
+        key=natural_sort_key
+    )
 
     if not recon_files_list:
         print("No image files found in the recon path.")
@@ -57,17 +60,23 @@ def process_images(recon_path, save_path):
         os.makedirs(diff_image_path)
 
     for i in trange(1, len(recon_files_list)):
-        image1 = np.loadtxt(recon_files_list[i-1], delimiter=',', dtype='float32')
-        image2 = np.loadtxt(recon_files_list[i], delimiter=',', dtype='float32')
+        # Load images using cv2.imread (for grayscale, use cv2.IMREAD_GRAYSCALE)
+        image1 = cv2.imread(recon_files_list[i-1], cv2.IMREAD_GRAYSCALE)
+        image2 = cv2.imread(recon_files_list[i], cv2.IMREAD_GRAYSCALE)
+
+        if image1 is None or image2 is None:
+            print(f"Error loading images {recon_files_list[i-1]} or {recon_files_list[i]}")
+            continue
         
         diff = calculate_pixel_difference(image1, image2)
         
-        save_diff_file_name = f'difference_{i-1}_{i}.png'
+        save_diff_file_name = f'difference_{i}_{i+1}.png'
         save_difference_image(diff, os.path.join(diff_image_path, save_diff_file_name))
 
+
 # Example usage
-data_path = '/path/to/data'
-save_path = '/path/to/save'
-recon_path = os.path.join(data_path, 'recon')
+data_path = '/home/juneyonglee/Desktop/AY_ust/model/performance/ust_chl_4_perfect_rawpixel/ust_chl_4_perfect/600000/'
+save_path = '/home/juneyonglee/Desktop/AY_ust/model/performance/ust_chl_4_perfect_rawpixel/ust_chl_4_perfect/600000/'
+recon_path = os.path.join(data_path, 'color_20')
 
 process_images(recon_path, save_path)

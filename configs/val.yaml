@@ -7,10 +7,10 @@ data_path:
   # model/results/ust_chl_4_perfect/600000/20
   # model/results/ust_chl_4_perfect/600000/30
   # model/results/ust_chl_4_perfect/600000/40
-  model/results/ust_chl_4_perfect/600000/50
+  # model/results/ust_chl_4_perfect/600000/50
 
 #  60 example
-#  model/results/ust_chl_4_perfect/600000/60
+ model/results/ust_chl_4_perfect/600000/60
 
 save_path: model/performance/ust_chl_4_perfect_rawpixel
 gpu_ids: [0, 1]

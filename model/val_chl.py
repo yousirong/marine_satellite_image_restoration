@@ -122,7 +122,7 @@ def save_colormap_image(data, save_path):
     plt.imsave(save_path_with_extension, colored_img)
 
     # Display the image with the updated color bar
-    plt.imshow(data, cmap='viridis', norm=norm)
+    plt.imshow(data, cmap='viridis', norm=Normalize(vmin=0, vmax=20))
     plt.colorbar(label='Chlorophyll-a concentration (mg/m³)')
     plt.title(f'Restored Chlorophyll-a Concentration')
 
