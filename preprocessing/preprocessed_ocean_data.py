@@ -12,7 +12,7 @@ from global_land_mask import globe
 import glob
 import math
 
-
+#낙동강,새만금 좌표 
 lat_min = 35.1#latitude, wedo
 lat_max = 36.2
 long_min = 129.1#longtitude, kyungdo

@@ -77,6 +77,6 @@ def process_images(recon_path, save_path):
 # Example usage
 data_path = '/home/juneyonglee/Desktop/AY_ust/model/performance/ust_chl_4_perfect_rawpixel/ust_chl_4_perfect/600000/'
 save_path = '/home/juneyonglee/Desktop/AY_ust/model/performance/ust_chl_4_perfect_rawpixel/ust_chl_4_perfect/600000/'
-recon_path = os.path.join(data_path, 'color_20')
+recon_path = os.path.join(data_path, 'color_10')
 
 process_images(recon_path, save_path)

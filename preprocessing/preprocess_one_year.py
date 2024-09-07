@@ -31,7 +31,7 @@ x_nak, y_nak = (3377, 3664)
 x_sae, y_sae = (3751, 4629)
 ##########################
 
-
+print("Please enter year")
 year = str(input())
 print(year)
 if not year.isdigit() or not (2012 <= int(year) <= 2020):  # 연도 범위는 필요에 따라 조정하세요

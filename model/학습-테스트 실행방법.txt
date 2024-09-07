@@ -44,6 +44,9 @@ current ===> python3 run.py --data_root data/modis_rrs/test/gt --mask_root data/
 
 
 <train code for RRS!!>
+RRS 훈련 파라미터 위치 
+/gocirrs_backup/home/pmilab/Documents/RFR-Inpainting/models/03south
+
 GOCI train
 - python3 run.py --data_root data/GOCI_RRS/train/Rrs/3 --mask_root data/GOCI_RRS/train/Rrs_mask/3 --model_save_path models/GOCI_RRS/3 --mask_mode 2 --batch_size 6 --gpu 0
 
