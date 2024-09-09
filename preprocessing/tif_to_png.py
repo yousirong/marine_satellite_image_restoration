@@ -2,7 +2,7 @@ import os
 import shutil
 import cv2
 import numpy as np
-img_path = './test/goci'
+img_path = '/media/juneyonglee/My Book/Preprocessed/UST/Chl-a_8day/train/90/2012_01_20_sae.tiff'
 save_path = './test/result'
 
 img_list = os.listdir(img_path)

@@ -31,10 +31,12 @@ for year in years:
     print(year)
     phase = 'Train' if int(year) < 2021 else 'Test'
     data_year = os.path.join(data_base, year)
+
     for month in tqdm(months):
         data_month = os.path.join(data_year, str(month))
         if os.path.isdir(data_month):
             imgs = os.listdir(data_month)
+
             for img in imgs:
                 if not 'nc' in img:
                     continue
@@ -42,8 +44,8 @@ for year in years:
                 f = nc.Dataset(path, 'r')
                 a = f['merged_daily_Chl'][:].data
                 np_a = np.array(a)
-                np_a = np.where(np_a == -999.0, 0, np_a)
-                np_a[np_a > 20] = 0
+                np_a = np.where(np_a == -999.0, 0, np_a)  # 결측값 처리
+                np_a[np_a > 20] = 0  # 20 이상의 값은 이상치로 간주하여 제거
                 idx = 0
                 row, col = np_a.shape
                 for k in range(0, row, 256):
