@@ -1,150 +1,91 @@
+# 234 밴드만 사용 
 import netCDF4 as nc
 import numpy as np
 import os
 import cv2
-import math
 from tqdm import tqdm
 
-# 낙동강과 새만금 좌표
-x_nak, y_nak = (3377, 3664)  # 낙동강
-x_sae, y_sae = (3751, 4629)  # 새만금
-
-#GOCI
-# img_path = '/media/pmilab/My Book1/GOCI/L2_Chl-a'
-# save_path = '/home/pmilab/Documents/GOCI/Chl-a'
-# save_degree_path = '/home/pmilab/Documents/GOCI/Rrs_degree'
-
-#GOCI-II
-#img_path = '/media/pmilab/My Book/GOCI-II/Chl/5/1'
-#save_path = '/home/pmilab/Documents/GOCI-II/Chl'
-#img_path = '/media/pmilab/My Book1/GOCI-II/Rrs(AC)'
-
-
 # 데이터 경로 설정
-img_path = '/media/pmilab/My Book1/GOCI/L2_Chl-a'
-save_path = '/home/pmilab/Documents/New_prep/GOCI/RRS_preprocessed'
-ocean_idx = np.load("/home/juneyonglee/Desktop/AY_ust/preprocessing/ocean_idx_arr.npy")
+img_path = '/media/juneyonglee/GOCI_vol1/GOCI/L2_Rrs'
+save_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs'
 
+# 낙동강, 새만금 좌표 설정
+lat_min = 35.1  # 위도
+lat_max = 36.2
+long_min = 129.1  # 경도
+long_max = 130.25
+
+# 동쪽 범위 설정
+x_min = 2702
+x_max = 2958
+y_min = 2397
+y_max = 2653
+
+# 저장 경로 없을 경우 생성
 if not os.path.isdir(save_path):
     os.makedirs(save_path)
 
-satellite_type = "GOCI" #set satellite_type(GOCI, GOCI-II, ...) 
+# 위성 및 데이터 유형 설정
+satellite_type = "GOCI"
+data_type = 'RRS'
+band_lst = [1,2,3,4,5,6,7,8]
 
-data_type = 'CHL' #set data_type(RRS, CHL, ...)
+# GOCI 데이터 경로에 있는 파일 확인
+file_list = os.listdir(img_path)
 
-if "GOCI-II" in img_path:
-    satellite_type = "GOCI-II"
+# 파일명에서 연도, 월, 일 추출 및 처리
+for file in tqdm(file_list):
+    if "RRS" in file and file.endswith(".he5"):  # RRS 데이터를 포함하는 파일만 처리
+        file_path = os.path.join(img_path, file)
 
-if 'Chl' in img_path:
-    data_type = 'CHL'
-elif 'Rrs' in img_path:
-    data_type = 'RRS'
-elif 'SSC' in img_path:
-    data_type = 'SSC'
+        # 파일명에서 연도, 월, 일 추출 (예: 'COMS_GOCI_L2A_GA_20110401001641.RRS.he5')
+        #                                  0123456789012345678901234567
+        file_name = os.path.basename(file)
+        year = file_name[19:23]
+        month = file_name[23:25]
+        day = file_name[25:27]
 
+        # 각 밴드에 대해 일별 평균 RRS를 저장할 배열과 파일 개수 초기화
+        daily_rrs_sum = {band: np.zeros((y_max - y_min + 1, x_max - x_min + 1)) for band in band_lst}
+        file_count = 0
 
+        try:
+            f = nc.Dataset(file_path, 'r')  # netCDF 파일 열기
+        except:
+            print(f"Failed to open file: {file_path}")
+            continue
 
+        file_count += 1
 
-if not os.path.isdir(save_path):
-    os.makedirs(save_path)
+        # 각 밴드에 대해 데이터 읽기 및 합산
+        for band in band_lst:
+            try:
+                # netCDF 형식으로 데이터를 읽고 처리
+                rrs_data = f['HDFEOS']['GRIDS']['Image Data']['Data Fields']['Band '+str(band)+ ' RRS Image Pixel Values']
+            except KeyError:
+                print(f"Band {band} not found in file {file}")
+                continue
+            
+            np_rrs = np.array(rrs_data)
+            np_rrs = np.where(np_rrs == -999.0, 0, np_rrs)  # 결측치 처리
+            np_rrs = np_rrs[y_min:y_max + 1, x_min:x_max + 1]  # 지정된 좌표 범위 내 데이터만 선택
 
-def check_pct(arr):
-    """결측치 및 이상치 비율 계산 함수"""
-    nans = np.isnan(arr)
-    zeros = (arr == 0)
-    neg_outlier = (arr < 0)
-    pos_outlier = (arr > 20)  # 상한선은 필요에 맞게 수정 가능
-    count = np.sum(nans) + np.sum(zeros) + np.sum(neg_outlier) + np.sum(pos_outlier)
-    pct = count / (256 * 256) * 10
-    temp_pct = pct * 10
-    pct = math.floor(pct) * 10
-    return temp_pct, pct
+            # 일별 합산
+            daily_rrs_sum[band] += np_rrs
 
-def process_day_data(day_path, img_list, satellite_type, data_type, save_path, ocean_idx):
-    """하루 동안의 데이터를 평균 내고 전처리하는 함수"""
-    daily_rrs_sum = None
-    count = 0
-
-    # 하루에 찍힌 모든 데이터를 평균
-    for img_file in img_list:
-        file_path = os.path.join(day_path, img_file)
-        f = nc.Dataset(file_path, 'r')
-        rrs_data = f['geophysical_data']['Rrs']['Rrs_555'][:].data  # 여기서 555 밴드를 사용 (필요에 따라 변경 가능)
-        np_rrs = np.array(rrs_data)
-        np_rrs = np.where(np_rrs == -999.0, 0, np_rrs)
-
-        if daily_rrs_sum is None:
-            daily_rrs_sum = np_rrs
-        else:
-            daily_rrs_sum += np_rrs
-        count += 1
         f.close()
 
-    if count > 0:
-        avg_rrs = daily_rrs_sum / count
-        avg_rrs = avg_rrs * 255  # 필요한 경우 이미지 범위 조정
+        # 파일 수만큼 나눠 평균값 계산 후 저장
+        if file_count > 0:
+            for band in band_lst:
+                daily_rrs_avg = daily_rrs_sum[band] / file_count  # 평균 계산
+                daily_rrs_avg = np.where(np.isnan(daily_rrs_avg), 0, daily_rrs_avg)  # NaN 처리
+                daily_rrs_avg = daily_rrs_avg * 255  # 모델 입력을 위해 255 스케일로 변환
 
-        # 낙동강 및 새만금 좌표에 대해 256x256 패치 추출 및 저장
-        process_and_save_patch(avg_rrs, x_nak, y_nak, 'nak', day_path, img_file, save_path)
-        process_and_save_patch(avg_rrs, x_sae, y_sae, 'sae', day_path, img_file, save_path)
+                # 일별 TIFF 파일로 저장
+                save_file_path = os.path.join(save_path, year, month, day)
+                if not os.path.isdir(save_file_path):
+                    os.makedirs(save_file_path)
 
-        # 전체 데이터에 대해 256x256 패치 추출
-        row, col = avg_rrs.shape
-        idx = 0
-        for k in range(0, row, 256):
-            for r in range(0, col, 256):
-                if idx in ocean_idx:
-                    patch = avg_rrs[k:k + 256, r:r + 256]
-                    if patch.shape != (256, 256):
-                        continue
-
-                    row_col = f'_r{k}_c{r}'
-                    temp_pct, pct = check_pct(patch)
-
-                    # 100% 결측치 패치는 제외
-                    if pct < 100:
-                        if temp_pct < 1:
-                            save_dir = os.path.join(save_path, 'perfect')
-                        else:
-                            save_dir = os.path.join(save_path, str(pct))
-                        if not os.path.isdir(save_dir):
-                            os.makedirs(save_dir)
-                        save_filename = os.path.join(save_dir, img_file[:-3] + row_col + '.tiff')
-                        cv2.imwrite(save_filename, patch)
-                idx += 1
-
-def process_and_save_patch(data, x, y, region, day_path, img_file, save_path):
-    """특정 좌표에서 패치 추출 및 저장"""
-    patch = data[x:x + 256, y:y + 256]
-    temp_pct, pct = check_pct(patch)
-
-    if pct < 100:
-        if temp_pct < 1:
-            save_dir = os.path.join(save_path, 'perfect')
-        else:
-            save_dir = os.path.join(save_path, str(pct))
-
-        if not os.path.isdir(save_dir):
-            os.makedirs(save_dir)
-
-        save_filename = os.path.join(save_dir, img_file[:-3] + f'_{region}.tiff')
-        cv2.imwrite(save_filename, patch)
-
-# GOCI 또는 GOCI-II 데이터 처리
-year_list = os.listdir(img_path)
-for year in year_list:
-    if year in ["2021"]:
-        year_path = os.path.join(img_path, year)
-        months = os.listdir(year_path)
-        
-        for month in tqdm(months):
-            month_path = os.path.join(year_path, month)
-            if os.path.isdir(month_path):
-                days = os.listdir(month_path)
-
-                for day in days:
-                    day_path = os.path.join(month_path, day)
-                    img_list = [f for f in os.listdir(day_path) if f.endswith('.nc')]
-
-                    if img_list:
-                        process_day_data(day_path, img_list, satellite_type="GOCI", data_type="RRS", save_path=save_path, ocean_idx=ocean_idx)
+                save_file = os.path.join(save_file_path, f"RRS_band_{band}.tiff")
+                cv2.imwrite(save_file, daily_rrs_avg)

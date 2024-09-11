@@ -17,24 +17,22 @@ def check_pct(arr, mask):
     # 육지(999)를 제외하고 유효한 해양 데이터 추출
     valid_ocean_data = arr_ocean[(arr_ocean != 999)]
     
-    # 결측값을 기준으로 loss 계산
-    nans = np.isnan(valid_ocean_data)
+    # 결측값과 이상치 계산
+    # nans = np.isnan(valid_ocean_data)
     zeros = (valid_ocean_data == 0)
     neg_outlier = (valid_ocean_data < 0)
     pos_outlier = (valid_ocean_data > 20)
-    assert np.sum(pos_outlier) < 1
-    # 결측값의 비율을 구함
-    count = np.sum(nans)+ np.sum(zeros) + np.sum(neg_outlier) + np.sum(pos_outlier)
+    
+    # 결측값 및 이상치 개수 확인
+    count = np.sum(zeros) + np.sum(neg_outlier) + np.sum(pos_outlier)
     total_ocean_pixels = valid_ocean_data.size  # 유효한 해양 픽셀 수
     
+    if total_ocean_pixels > 0:
+        loss_pct = (count / total_ocean_pixels) * 100  # 비율을 퍼센트로 계산
+    else:
+        loss_pct = 100
     
-    loss_pct = (count / total_ocean_pixels) * 10
-   
-    
-    temp_pct = loss_pct * 10 
-    loss_pct = math.floor(loss_pct) * 10  # 소수점 버림 (10 단위로)
-    
-    return temp_pct, loss_pct
+    return loss_pct
 
 # 해양 데이터 비율을 계산하는 함수
 def check_ocean_pct(patch, mask):
@@ -42,7 +40,7 @@ def check_ocean_pct(patch, mask):
     valid_ocean_pixels = np.sum(~np.isnan(patch) & (patch != 999) & (patch > 0) & (patch <= 20) & ocean_pixels)  # 유효한 해양 데이터 (육지, 이상치 제외)
     total_ocean_pixels = np.sum(ocean_pixels)  # 전체 해양 픽셀 수
     
-    ocean_data_pct = ((total_ocean_pixels- valid_ocean_pixels)/ total_ocean_pixels) * 100 if total_ocean_pixels > 0 else 0
+    ocean_data_pct = (valid_ocean_pixels / total_ocean_pixels) * 100 if total_ocean_pixels > 0 else 0
     return ocean_data_pct
 
 ########## path ##########
@@ -96,6 +94,7 @@ def calculate_8day_avg(files, data_dir, land_sea_mask):
 # 패치 저장 함수 추가
 def save_patch_image(patch, file_path):
     print(f"Saving patch to: {file_path}")
+    
     # 육지(빨간색 999)는 빨간색으로 시각화
     patch_visual = np.where(patch == 999, 255, patch)  # 빨간색을 RGB 255로 시각화
     cv2.imwrite(file_path, patch_visual)
@@ -129,30 +128,29 @@ if os.path.isdir(data_month):
         s_mask_patch = land_sea_mask[x_sae + s_row:x_sae + s_row + 256, y_sae + s_col:y_sae + s_col + 256]
 
         # 해양 데이터 비율 확인
-        min_ocean_pct = 1  # 최소 해양 데이터 비율을 1로 낮추고 테스트
+        min_ocean_pct = 0.1  # 최소 해양 데이터 비율을 낮춰서 설정
         n_ocean_pct = check_ocean_pct(n_patch_256, n_mask_patch)
         s_ocean_pct = check_ocean_pct(s_patch_256, s_mask_patch)
 
         # 결측치 및 이상치 비율 계산
-        n_temp, n_pct = check_pct(n_patch_256, n_mask_patch)
-        s_temp, s_pct = check_pct(s_patch_256, s_mask_patch)
+        n_pct = check_pct(n_patch_256, n_mask_patch)
+        s_pct = check_pct(s_patch_256, s_mask_patch)
 
         # 패치 로그 출력 및 저장 확인
-        print(f"Patch {i}: n_ocean_pct = {n_ocean_pct}, s_ocean_pct = {s_ocean_pct}, n_pct = {n_pct}, s_pct = {s_pct}")
-        print(f"n_temp: {n_temp}, s_temp: {s_temp}")  # n_temp와 s_temp 값을 출력해서 확인
-        
-        # n_patch 저장 (n_temp와 n_pct에 따라 저장)
-        if n_ocean_pct >= min_ocean_pct and n_pct != 100:
-            if n_pct < 1:
+        print(f"Patch {i}: n_ocean_pct = {n_ocean_pct:.2f}, s_ocean_pct = {s_ocean_pct:.2f}, n_pct = {n_pct:.2f}, s_pct = {s_pct:.2f}")
+
+        # n_patch 저장 (loss_pct와 ocean_pct에 따라 다양한 폴더에 저장)
+        if n_ocean_pct >= min_ocean_pct:
+            if n_pct == 0:
                 save_path = os.path.join(save_base, 'train', 'perfect', f"2012_01_{i}_nak.tiff")
             else:
-                save_path = os.path.join(save_base, 'train', str(n_pct), f"2012_01_{i}_nak.tiff")
+                save_path = os.path.join(save_base, 'train', str(int(n_pct // 10) * 10), f"2012_01_{i}_nak.tiff")
             save_patch_image(n_patch_256, save_path)
 
-        # s_patch 저장 (s_temp와 s_pct에 따라 저장)
-        if s_ocean_pct >= min_ocean_pct and s_pct != 100:
-            if s_pct < 1:
+        # s_patch 저장 (loss_pct와 ocean_pct에 따라 다양한 폴더에 저장)
+        if s_ocean_pct >= min_ocean_pct:
+            if s_pct == 0:
                 save_path = os.path.join(save_base, 'train', 'perfect', f"2012_01_{i}_sae.tiff")
             else:
-                save_path = os.path.join(save_base, 'train', str(s_pct), f"2012_01_{i}_sae.tiff")
+                save_path = os.path.join(save_base, 'train', str(int(s_pct // 10) * 10), f"2012_01_{i}_sae.tiff")
             save_patch_image(s_patch_256, save_path)

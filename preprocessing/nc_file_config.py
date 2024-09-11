@@ -3,9 +3,9 @@ import netCDF4 as nc
 
 # NetCDF 파일 경로
 # path = '/media/juneyonglee/My Book/VIIRS/VIIRS-SNPP/OC/2013/01/01/SNPP_VIIRS.20130101T035400.L2.OC.nc'
-path = '/media/juneyonglee/My Book/MODIS/MODIS-Aqua/OC/2012/01/01/AQUA_MODIS.20120101T031000.L2.OC.nc'
+# path = '/media/juneyonglee/My Book/MODIS/MODIS-Aqua/OC/2012/01/01/AQUA_MODIS.20120101T031000.L2.OC.nc'
 # path = '/media/juneyonglee/My Book/UST21/Daily/2012/01/UST21_L3_Merged-Chla-1D_20120104.nc'
-
+path = '/home/juneyonglee/Documents/COMS_GOCI_L2A_GA_20110401001641.RRS.he5'
 def print_group_info(group, indent=0):
     indent_str = "  " * indent
     print(f"{indent_str}Group: {group.path}")
@@ -96,4 +96,58 @@ Group: /
     Group: /processing_control/input_parameters
     Group: /processing_control/flag_percentages
 
+    
+
+
+    GOCI 관련 
+ (unir) juneyonglee@juneyonglee-RTX3090-2:~/Desktop/AY_ust$ python preprocessing/nc_file_config.py
+Variables: dict_keys([])
+Dimensions: dict_keys([])
+Groups: dict_keys(['HDFEOS', 'HDFEOS INFORMATION'])
+Group: /
+  Group: /HDFEOS
+    Group: /HDFEOS/ADDITIONAL
+      Group: /HDFEOS/ADDITIONAL/FILE_ATTRIBUTES
+    Group: /HDFEOS/GRIDS
+      Group: /HDFEOS/GRIDS/Image Data
+        Group: /HDFEOS/GRIDS/Image Data/Data Fields
+          Variable: Band 1 RRS Image Pixel Values (5685, 5567) float32
+          Variable: Band 2 RRS Image Pixel Values (5685, 5567) float32
+          Variable: Band 3 RRS Image Pixel Values (5685, 5567) float32
+          Variable: Band 4 RRS Image Pixel Values (5685, 5567) float32
+          Variable: Band 5 RRS Image Pixel Values (5685, 5567) float32
+          Variable: Band 6 RRS Image Pixel Values (5685, 5567) float32
+          Variable: Band 7 RRS Image Pixel Values (5685, 5567) float32
+          Variable: Band 8 RRS Image Pixel Values (5685, 5567) float32
+          Dimension: phony_dim_0 5685
+          Dimension: phony_dim_1 5567
+    Group: /HDFEOS/POINTS
+      Group: /HDFEOS/POINTS/Ephemeris
+        Group: /HDFEOS/POINTS/Ephemeris/Data
+        Group: /HDFEOS/POINTS/Ephemeris/Linkage
+      Group: /HDFEOS/POINTS/Event
+        Group: /HDFEOS/POINTS/Event/Data
+        Group: /HDFEOS/POINTS/Event/Linkage
+      Group: /HDFEOS/POINTS/File Descripter Metadata
+        Group: /HDFEOS/POINTS/File Descripter Metadata/Data
+        Group: /HDFEOS/POINTS/File Descripter Metadata/Linkage
+      Group: /HDFEOS/POINTS/Map Projection
+        Group: /HDFEOS/POINTS/Map Projection/Data
+        Group: /HDFEOS/POINTS/Map Projection/Linkage
+      Group: /HDFEOS/POINTS/Navigation for GOCI
+        Group: /HDFEOS/POINTS/Navigation for GOCI/Data
+          Variable: Navigation for GOCI (128,) {'names': ['Band number', 'Slot number', 'Relative time', 'Spacecraft attitude', 'XO', 'YO', 'XS', 'YS', 'XPO', 'YPO', 'XPS', 'YPS', 'Number of valid A parameters', 'A parameters value', 'Number of valid B parameters', 'B parameters value', 'Number of valid C parameters', 'C parameters value', 'Number of valid D parameters', 'D parameters value', 'Number of valid A prime parameters', 'A prime parameters value', 'Number of valid B prime parameters', 'B prime parameters value', 'Number of valid C prime parameters', 'C prime parameters value', 'Number of valid D prime parameters', 'D prime parameters value'], 'formats': ['<i4', '<i4', '<f4', ('<f4', (3,)), '<f4', '<f4', '<f4', '<f4', '<f4', '<f4', '<f4', '<f4', '<i4', ('<f4', (16,)), '<i4', ('<f4', (16,)), '<i4', ('<f4', (16,)), '<i4', ('<f4', (16,)), '<i4', ('<f4', (16,)), '<i4', ('<f4', (16,)), '<i4', ('<f4', (16,)), '<i4', ('<f4', (16,))], 'offsets': [0, 4, 8, 12, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 124, 128, 192, 196, 260, 264, 328, 332, 396, 400, 464, 468, 532, 536], 'itemsize': 600, 'aligned': True}
+          Dimension: phony_dim_2 128
+        Group: /HDFEOS/POINTS/Navigation for GOCI/Linkage
+      Group: /HDFEOS/POINTS/Radiometric Calibration for GOCI
+        Group: /HDFEOS/POINTS/Radiometric Calibration for GOCI/Data
+        Group: /HDFEOS/POINTS/Radiometric Calibration for GOCI/Linkage
+      Group: /HDFEOS/POINTS/Scene Header
+        Group: /HDFEOS/POINTS/Scene Header/Data
+        Group: /HDFEOS/POINTS/Scene Header/Linkage
+      Group: /HDFEOS/POINTS/Validataion (trailer)
+        Group: /HDFEOS/POINTS/Validataion (trailer)/Data
+        Group: /HDFEOS/POINTS/Validataion (trailer)/Linkage
+  Group: /HDFEOS INFORMATION
+    Variable: StructMetadata.0 () <class 'str'>
 '''
