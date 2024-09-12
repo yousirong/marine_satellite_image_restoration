@@ -96,6 +96,9 @@ def save_patch_image(patch, file_path):
 # 전체 년도를 처리할 수 있도록 수정
 years = os.listdir(data_base)
 
+# 패치 생성 개수 설정 (예: 한 영역에서 5개의 256x256 패치 추출)
+num_patches_per_region = 50
+
 for year in years:
     print(f"Processing year: {year}")
     data_year = os.path.join(data_base, year)
@@ -115,41 +118,49 @@ for year in years:
                 n_patch_512 = avg_data[x_nak:x_nak + 512, y_nak:y_nak + 512]
                 s_patch_512 = avg_data[x_sae:x_sae + 512, y_sae:y_sae + 512]
 
-                # 512x512 영역에서 256x256 랜덤 패치 선택
-                n_row = random.randint(0, 512 - 256)
-                n_col = random.randint(0, 512 - 256)
-                s_row = random.randint(0, 512 - 256)
-                s_col = random.randint(0, 512 - 256)
+                # 가능한 패치 좌표를 미리 생성
+                n_possible_coords = [(row, col) for row in range(0, 512 - 256) for col in range(0, 512 - 256)]
+                s_possible_coords = [(row, col) for row in range(0, 512 - 256) for col in range(0, 512 - 256)]
 
-                n_patch_256 = n_patch_512[n_row:n_row + 256, n_col:n_col + 256]
-                s_patch_256 = s_patch_512[s_row:s_row + 256, s_col:s_col + 256]
+                # 여러 개의 256x256 랜덤 패치 추출 (좌표 중복 방지)
+                for patch_num in range(num_patches_per_region):
+                    # 낙동강에서 랜덤 좌표 선택 (중복 방지)
+                    n_row, n_col = random.choice(n_possible_coords)
+                    n_possible_coords.remove((n_row, n_col))  # 선택된 좌표 제거
 
-                # 마스크 패치 추출
-                n_mask_patch = land_sea_mask[x_nak + n_row:x_nak + n_row + 256, y_nak + n_col:y_nak + n_col + 256]
-                s_mask_patch = land_sea_mask[x_sae + s_row:x_sae + s_row + 256, y_sae + s_col:y_sae + s_col + 256]
+                    # 새만금에서 랜덤 좌표 선택 (중복 방지)
+                    s_row, s_col = random.choice(s_possible_coords)
+                    s_possible_coords.remove((s_row, s_col))  # 선택된 좌표 제거
 
-                # 해양 데이터 비율 확인
-                min_ocean_pct = 0.1  # 최소 해양 데이터 비율을 설정
-                n_ocean_pct = check_ocean_pct(n_patch_256, n_mask_patch)
-                s_ocean_pct = check_ocean_pct(s_patch_256, s_mask_patch)
+                    n_patch_256 = n_patch_512[n_row:n_row + 256, n_col:n_col + 256]
+                    s_patch_256 = s_patch_512[s_row:s_row + 256, s_col:s_col + 256]
 
-                # 결측치 및 이상치 비율 계산
-                n_pct = check_pct(n_patch_256, n_mask_patch)
-                s_pct = check_pct(s_patch_256, s_mask_patch)
+                    # 마스크 패치 추출
+                    n_mask_patch = land_sea_mask[x_nak + n_row:x_nak + n_row + 256, y_nak + n_col:y_nak + n_col + 256]
+                    s_mask_patch = land_sea_mask[x_sae + s_row:x_sae + s_row + 256, y_sae + s_col:y_sae + s_col + 256]
 
-                print(f"Patch {i}: n_ocean_pct = {n_ocean_pct:.2f}, s_ocean_pct = {s_ocean_pct:.2f}, n_pct = {n_pct:.2f}, s_pct = {s_pct:.2f}")
+                    # 해양 데이터 비율 확인
+                    min_ocean_pct = 0.1  # 최소 해양 데이터 비율을 설정
+                    n_ocean_pct = check_ocean_pct(n_patch_256, n_mask_patch)
+                    s_ocean_pct = check_ocean_pct(s_patch_256, s_mask_patch)
 
-                # 패치 저장 (조건을 변경해 ocean_idx 매칭 조건 제거)
-                if n_ocean_pct >= min_ocean_pct:
-                    if n_pct == 0:
-                        save_path = os.path.join(save_base, 'train', 'perfect', f"{year}_{month}_{i}_nak_r{n_row}_c{n_col}.tiff")
-                    else:
-                        save_path = os.path.join(save_base, 'train', str(int(n_pct // 10) * 10), f"{year}_{month}_{i}_nak_r{n_row}_c{n_col}.tiff")
-                    save_patch_image(n_patch_256, save_path)
+                    # 결측치 및 이상치 비율 계산
+                    n_pct = check_pct(n_patch_256, n_mask_patch)
+                    s_pct = check_pct(s_patch_256, s_mask_patch)
 
-                if s_ocean_pct >= min_ocean_pct:
-                    if s_pct == 0:
-                        save_path = os.path.join(save_base, 'train', 'perfect', f"{year}_{month}_{i}_sae_r{s_row}_c{s_col}.tiff")
-                    else:
-                        save_path = os.path.join(save_base, 'train', str(int(s_pct // 10) * 10), f"{year}_{month}_{i}_sae_r{s_row}_c{s_col}.tiff")
-                    save_patch_image(s_patch_256, save_path)
+                    print(f"Patch {i}: n_ocean_pct = {n_ocean_pct:.2f}, s_ocean_pct = {s_ocean_pct:.2f}, n_pct = {n_pct:.2f}, s_pct = {s_pct:.2f}")
+
+                    # 패치 저장 (조건을 변경해 ocean_idx 매칭 조건 제거)
+                    if n_ocean_pct >= min_ocean_pct:
+                        if n_pct == 0:
+                            save_path = os.path.join(save_base, 'train', 'perfect', f"{year}_{month}_{i}_nak_r{n_row}_c{n_col}.tiff")
+                        else:
+                            save_path = os.path.join(save_base, 'train', str(int(n_pct // 10) * 10), f"{year}_{month}_{i}_nak_r{n_row}_c{n_col}.tiff")
+                        save_patch_image(n_patch_256, save_path)
+
+                    if s_ocean_pct >= min_ocean_pct:
+                        if s_pct == 0:
+                            save_path = os.path.join(save_base, 'train', 'perfect', f"{year}_{month}_{i}_sae_r{s_row}_c{s_col}.tiff")
+                        else:
+                            save_path = os.path.join(save_base, 'train', str(int(s_pct // 10) * 10), f"{year}_{month}_{i}_sae_r{s_row}_c{s_col}.tiff")
+                        save_patch_image(s_patch_256, save_path)
