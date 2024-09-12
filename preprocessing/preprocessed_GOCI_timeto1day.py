@@ -6,7 +6,7 @@ import cv2
 from tqdm import tqdm
 
 # 데이터 경로 설정
-img_path = '/media/juneyonglee/GOCI_vol2/GOCI/L2_Rrs'
+img_path = '/media/juneyonglee/GOCI_vol1/GOCI/L2_Rrs'
 save_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs2'
 
 # 낙동강, 새만금 좌표 설정
