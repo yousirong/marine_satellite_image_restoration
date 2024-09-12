@@ -6,8 +6,8 @@ import cv2
 from tqdm import tqdm
 
 # 데이터 경로 설정
-img_path = '/media/juneyonglee/GOCI_vol1/GOCI/L2_Rrs'
-save_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs'
+img_path = '/media/juneyonglee/GOCI_vol2/GOCI/L2_Rrs'
+save_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs2'
 
 # 낙동강, 새만금 좌표 설정
 lat_min = 35.1  # 위도
@@ -28,7 +28,7 @@ if not os.path.isdir(save_path):
 # 위성 및 데이터 유형 설정
 satellite_type = "GOCI"
 data_type = 'RRS'
-band_lst = [1,2,3,4,5,6,7,8]
+band_lst = [2,3,4]
 
 # GOCI 데이터 경로에 있는 파일 확인
 file_list = os.listdir(img_path)
@@ -41,9 +41,9 @@ for file in tqdm(file_list):
         # 파일명에서 연도, 월, 일 추출 (예: 'COMS_GOCI_L2A_GA_20110401001641.RRS.he5')
         #                                  0123456789012345678901234567
         file_name = os.path.basename(file)
-        year = file_name[19:23]
-        month = file_name[23:25]
-        day = file_name[25:27]
+        year = file_name[17:21]
+        month = file_name[21:23]
+        day = file_name[23:25]
 
         # 각 밴드에 대해 일별 평균 RRS를 저장할 배열과 파일 개수 초기화
         daily_rrs_sum = {band: np.zeros((y_max - y_min + 1, x_max - x_min + 1)) for band in band_lst}
