@@ -1,13 +1,15 @@
 project_name: chl-a
-exp_name: CHL_0to21_ver2
+exp_name: UST21_CHL_8day
 notes: chl_1
 
-data_root: /media/juneyonglee/My Book/data/Chl-a/train/perfect
+data_root: /media/juneyonglee/My Book/Preprocessed/UST/Chl-a_8day/train
 mask_root: /media/juneyonglee/My Book/data/mask/Train
-# model_save_path: model/models/ust_chl_4
-model_save_path: /home/juneyonglee/Desktop/AY_ust/model/models/ust_chl_3
-model_path: model/models/ust_chl_4/g_600000.pth
+model_save_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/ust21_chl_8day
+# model_path: model/models/ust_chl_4/g_600000.pth
+model_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/ust21_chl_8day/
+land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
 
+# Training parameters
 max_epochs: ~
 mask_mode: 0
 batch_size: 32
@@ -16,6 +18,5 @@ num_iters: 800000
 n_threads: 6
 gpu_ids: [0, 1]
 save_capacity: 5
-
-num_workers: 2
-warmup_batchs: 1500S
+num_workers: 16
+warmup_batches: 1500  

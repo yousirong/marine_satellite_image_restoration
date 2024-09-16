@@ -1,6 +1,7 @@
 import argparse
 import os
 from model import RFRNetModel
+from model_withvalidation import RFRNetModel_withvalidation
 from dataset import Dataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -29,7 +30,7 @@ def run():
     if args.test:
         model.initialize_model(args.model_path, False, None, args.gpu_ids)
         model.cuda()
-        dataloader = DataLoader(Dataset(args.data_root, args.mask_root, args.mask_mode, args.target_size, mask_reverse=False, training=False), 
+        dataloader = DataLoader(Dataset(args.data_root, args.mask_root,args.land_sea_mask_path, args.mask_mode, args.target_size, mask_reverse=False, training=False), 
                                 batch_size=args.batch_size, 
                                 num_workers=args.n_threads)  # num_workers 설정
         model.test(dataloader, args.result_save_path)
@@ -40,7 +41,7 @@ def run():
     else:
         model.initialize_model(args.model_path, True, args.model_save_path, args.gpu_ids)
         model.cuda()
-        dataloader = DataLoader(Dataset(args.data_root, args.mask_root, args.mask_mode, args.target_size, mask_reverse=False), 
+        dataloader = DataLoader(Dataset(args.data_root, args.mask_root,args.land_sea_mask_path, args.mask_mode, args.target_size, mask_reverse=False), 
                                 batch_size=args.batch_size, 
                                 shuffle=True, 
                                 num_workers=args.n_threads)  # num_workers 설정

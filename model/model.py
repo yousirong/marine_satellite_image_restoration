@@ -4,8 +4,7 @@ from utils.io import load_ckpt
 from utils.io import save_ckpt
 from utils.io import is_available_to_store
 from torchvision import transforms
-from torchvision.utils import make_grid
-from torchvision.utils import save_image
+from torchvision.utils import make_grid, save_image
 from modules.RFRNet import RFRNet, VGG16FeatureExtractor
 import os
 import time
@@ -14,6 +13,12 @@ import cv2
 import numpy as np
 from PIL import Image
 import torch.nn as nn
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import tifffile as tiff
+from PIL import Image
+
 class RFRNetModel():
     def __init__(self):
         self.G = None
@@ -28,6 +33,11 @@ class RFRNetModel():
         self.l1_loss_val = 0.0
         self.writer = None
         self.totensor = transforms.ToTensor()
+
+    # # Preprocess the mask to exclude land pixels (set land to 0, ocean to 1)
+    # def preprocess_mask(self, mask, land_value=999):
+    #     # Ensure the mask is on the same device and use torch.where to handle mask values
+    #     return torch.where(mask == land_value, torch.tensor(0, device=mask.device), torch.tensor(1, device=mask.device))
 
     def initialize_model(self, path=None, train=True, model_save_path = None, gpu_ids=[0]):
         self.G = RFRNet()
@@ -62,22 +72,83 @@ class RFRNetModel():
                 self.lossNet.cuda()
         else:
             self.device = torch.device("cpu")
-    def save_img(self, img, file_path):
-        '''
+    # def save_img(self, img, file_path):
+    #     '''
 
-        img_min = np.min(img)
-        img_max = np.max(img)
+    #     img_min = np.min(img)
+    #     img_max = np.max(img)
 
-        #min-max normalization
-        out_img = (img-img_min)/(img_max-img_min)
-        out_img = out_img*255
-        '''
-        img = img.cpu().numpy()
-        #gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        gray_img = img *255.
-        cv2.imwrite(file_path, gray_img)
+    #     #min-max normalization
+    #     out_img = (img-img_min)/(img_max-img_min)
+    #     out_img = out_img*255
+    #     '''
+    #     img = img.cpu().numpy()
+    #     #gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    #     gray_img = img *255.
+    #     cv2.imwrite(file_path, gray_img)
+    # def save_image_cv2(self, tensor, save_path, normalize=False):
+    #     """
+    #     Save a PyTorch tensor as an image using OpenCV's cv2.imwrite.
 
+    #     Args:
+    #         tensor (torch.Tensor): A PyTorch tensor representing an image (C, H, W) or (B, C, H, W)
+    #         save_path (str): The path where the image should be saved.
+    #         normalize (bool): If True, normalize the tensor values to the 0-255 range for visualization.
+    #     """
+    #     if not isinstance(tensor, torch.Tensor):
+    #         raise ValueError(f"Expected tensor to be a torch.Tensor object, but got: {type(tensor)}")
 
+    #     # Check if tensor is batched
+    #     if tensor.ndimension() == 4:  # (B, C, H, W)
+    #         tensor = tensor[0]  # Take the first image from the batch
+
+    #     # Normalize the tensor to 0-255 for visualization if necessary
+    #     if normalize:
+    #         tensor = (tensor - tensor.min()) / (tensor.max() - tensor.min()) * 255
+
+    #     # Convert tensor to NumPy array and change format from (C, H, W) to (H, W, C)
+    #     img_np = tensor.detach().permute(1, 2, 0).cpu().numpy().astype(np.uint8)
+
+    #     # Handle single-channel (grayscale) images separately
+    #     if img_np.shape[2] == 1:
+    #         img_np = img_np.squeeze(axis=2)
+
+    #     # Ensure the directory exists before saving
+    #     os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    #     # Save the image using OpenCV
+    #     cv2.imwrite(save_path, img_np)
+    #     print(f"Image saved at {save_path}")
+
+    def save_batch_images_grid(self, images, save_path, nrow=8, padding=2, normalize=True):
+        """
+        Save a batch of images as a grid using torchvision.utils.make_grid.
+
+        Args:
+            images (torch.Tensor): Batch of images (B, C, H, W).
+            save_path (str): The path where the image grid should be saved (including extension).
+            nrow (int): Number of images per row in the grid.
+            padding (int): Amount of padding between images in the grid.
+            normalize (bool): If True, normalize the tensor values to the 0-1 range for visualization.
+        """
+        if not isinstance(images, torch.Tensor):
+            raise ValueError(f"Expected images to be a torch.Tensor object, but got: {type(images)}")
+
+        # Make a grid from the batch of images
+        grid = make_grid(images, nrow=nrow, padding=padding, normalize=normalize)
+
+        # Ensure the directory exists before saving
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+        # Ensure the file path includes a valid extension (e.g., .png)
+        if not save_path.endswith('.png'):
+            save_path += '.png'
+
+        # Save the grid as an image
+        save_image(grid, save_path)
+        print(f"Image grid saved at {save_path}")
+
+    
     def train(self, train_loader, save_path, store_capacity=10, finetune = False, iters=800000):
     #    writer = SummaryWriter(log_dir="log_info")
         count = 0
@@ -95,51 +166,56 @@ class RFRNetModel():
         while True:
             for items in train_loader:
                 gt_images, masks = self.__cuda__(*items)
-               # print(masks)
-               # masks = masks//255.0
-                #print(masked_images.shape)
-                #gt_images = gt_images.unsqueeze(dim=1)
-                #masks = masks.unsqueeze(dim=1)
 
                 masked_images = gt_images * masks
-                #masked_images = masked_images.unsqueeze(dim=1)
-
 
                 masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
 
                 self.update_parameters()
                 self.iter += 1
 
-                if self.iter % 5000 == 0:  # pth 저장되는 단위
+                if self.iter % 5000 == 0:  
                     e_time = time.time()
                     int_time = e_time - s_time
                     print("Iteration:%d, l1_loss:%.4f, time_taken:%.2f" %(self.iter, self.l1_loss_val/50, int_time))
                     self.writer.add_scalar("Train/Loss", self.l1_loss_val, self.iter)
                     s_time = time.time()
                     self.l1_loss_val = 0.0
-                #store checkpoint per 40000 iteration.
-                if self.iter % 10000==0 :
-                    file_path = '{:s}/gt_img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}', self.iter)
-                    save_image(gt_images, file_path)
+                # Save image grid every 10000 iterations
+                if self.iter % 10000 == 0:
+                    # Ensure images are saved to the correct path: 'ust21_chl_8day'
+                    save_directory = os.path.join(save_path, 'training')
+                    os.makedirs(save_directory, exist_ok=True)  # Ensure the directory exists
 
-                    file_path = '{:s}/img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}', self.iter)
-                    save_image(comp_B, file_path)
+                    file_prefix = f"{save_directory}/{os.path.basename(save_path)}_{self.iter}"
+                    self.save_batch_images_grid(gt_images, f"{file_prefix}_gt")
+                    self.save_batch_images_grid(comp_B, f"{file_prefix}_img")
+                    self.save_batch_images_grid(fake_B, f"{file_prefix}_fake")
+                    self.save_batch_images_grid(masked_image, f"{file_prefix}_masked")
+                    self.save_batch_images_grid(masks, f"{file_prefix}_masks")
+                # if self.iter % 1000==0 :
+                #     file_path = '{:s}/gt_img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}', self.iter)
+                #     self.save_batch_images_cv2(gt_images, file_path)
 
-                    file_path = '{:s}/f_img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}', self.iter)
-                    save_image(fake_B, file_path)
+                #     file_path = '{:s}/img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}', self.iter)
+                #     self.save_batch_images_cv2(comp_B, file_path)
 
-                    file_path = '{:s}/masked_img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}',self.iter)
-                    save_image(masked_image, file_path)
+                #     file_path = '{:s}/fake_img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}', self.iter)
+                #     self.save_batch_images_cv2(fake_B, file_path)
 
-                    file_path = '{:s}/mask_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}',self.iter)
-                    save_image(masks, file_path)
-                if self.iter % 100 == 0:
+                #     file_path = '{:s}/masked_img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}',self.iter)
+                #     self.save_batch_images_cv2(masked_image, file_path)
+
+                #     file_path = '{:s}/mask_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}',self.iter)
+                #     self.save_batch_images_cv2(masks, file_path)
+                if self.iter % 1000 == 0:   # pth 저장되는 단위
                     if not os.path.exists('{:s}'.format(save_path)):
                         os.makedirs('{:s}'.format(save_path))
                     if is_available_to_store(store_capacity):
                         save_ckpt('{:s}/g_{:d}.pth'.format(save_path, self.iter ), [('generator', self.G)], [('optimizer_G', self.optm_G)], self.iter)
                     else:
                         exit()
+
     def test(self, test_loader, result_save_path):
         self.G.eval()
         #print("++++checkintpoint1++++")
@@ -153,7 +229,7 @@ class RFRNetModel():
             #print("++++checkintpoint3++++")
             si_time  = time.time()
             gt_images, masks= self.__cuda__(*items)
-
+            # masks = self.preprocess_mask(masks)
             #masks = masks//255.0
             masked_images = gt_images * masks
             #masked_images = gt_images
@@ -329,4 +405,3 @@ class RFRNetModel():
 
     def __cuda__(self, *args):
         return (item.to(self.device) for item in args)
-

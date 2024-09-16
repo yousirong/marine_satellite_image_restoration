@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from scipy import io
 from datetime import datetime
 from tqdm import tqdm
-import tifffile as tiff  # 추가
+import tifffile as tiff
 
 # 수정된 check_pct 함수: NaN 비율로 loss 계산, 육지(999) 제외
 def check_pct(arr, mask):
@@ -51,7 +51,7 @@ x_sae, y_sae = (3505, 3920)  # 새만금 영역 시작점
 pcts = [str(i) for i in range(0, 100, 10)]
 pcts.append('perfect')
 
-for phase in ['train', 'test', 'ocean']:
+for phase in ['train', 'test']:
     for pct in pcts:
         temp = os.path.join(save_base, phase, pct)
         if not os.path.isdir(temp):
@@ -106,6 +106,7 @@ all_files = gather_all_files(data_base)
 
 # 패치 생성 개수 설정 (예: 한 영역에서 50개의 256x256 패치 추출)
 num_patches_per_region = 50
+train_ratio = 0.8  # train:test 비율 8:2
 
 # 8일씩 그룹화하여 평균 계산
 for i in tqdm(range(0, len(all_files) - 7), desc="8-day moving avg"):
@@ -151,24 +152,24 @@ for i in tqdm(range(0, len(all_files) - 7), desc="8-day moving avg"):
         n_pct = check_pct(n_patch_256, n_mask_patch)
         s_pct = check_pct(s_patch_256, s_mask_patch)
 
-        # 해양 및 결측치 비율 출력
-        # print(f"Patch {patch_num}: n_ocean_pct = {n_ocean_pct:.2f}%, s_ocean_pct = {s_ocean_pct:.2f}%, n_pct = {n_pct:.2f}%, s_pct = {s_pct:.2f}%")
-
         # 패치 저장 (NaN 비율을 기준으로 폴더 선택)
+        # 데이터가 train에 저장될지 test에 저장될지 결정
+        phase = 'train' if random.random() < train_ratio else 'test'
+        
         if n_ocean_pct >= min_ocean_pct:
             actual_n_row = x_nak + n_row  # 실제 좌표
             actual_n_col = y_nak - 256 + n_col  # 실제 좌표
             if n_pct == 0:
-                save_path = os.path.join(save_base, 'train', 'perfect', f"{start_date.strftime('%Y%m%d')}_nak_r{actual_n_row}_c{actual_n_col}.tiff")
+                save_path = os.path.join(save_base, phase, 'perfect', f"{start_date.strftime('%Y%m%d')}_nak_r{actual_n_row}_c{actual_n_col}.tiff")
             else:
-                save_path = os.path.join(save_base, 'train', str(int(n_pct // 10) * 10), f"{start_date.strftime('%Y%m%d')}_nak_r{actual_n_row}_c{actual_n_col}.tiff")
+                save_path = os.path.join(save_base, phase, str(int(n_pct // 10) * 10), f"{start_date.strftime('%Y%m%d')}_nak_r{actual_n_row}_c{actual_n_col}.tiff")
             save_patch_image(n_patch_256, save_path)
 
         if s_ocean_pct >= min_ocean_pct:
             actual_s_row = x_sae - 256 + s_row  # 실제 좌표
             actual_s_col = y_sae - 512 + s_col  # 실제 좌표
             if s_pct == 0:
-                save_path = os.path.join(save_base, 'train', 'perfect', f"{start_date.strftime('%Y%m%d')}_sae_r{actual_s_row}_c{actual_s_col}.tiff")
+                save_path = os.path.join(save_base, phase, 'perfect', f"{start_date.strftime('%Y%m%d')}_sae_r{actual_s_row}_c{actual_s_col}.tiff")
             else:
-                save_path = os.path.join(save_base, 'train', str(int(s_pct // 10) * 10), f"{start_date.strftime('%Y%m%d')}_sae_r{actual_s_row}_c{actual_s_col}.tiff")
+                save_path = os.path.join(save_base, phase, str(int(s_pct // 10) * 10), f"{start_date.strftime('%Y%m%d')}_sae_r{actual_s_row}_c{actual_s_col}.tiff")
             save_patch_image(s_patch_256, save_path)
