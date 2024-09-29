@@ -6,8 +6,12 @@ from dataset import Dataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from utils.io import load_yaml, build_save_folder
-import torch
-from val_chl import validate
+import torch 
+# ust21 1day 
+# from val_chl import validate
+
+# ust21 8day new validate function
+from val_chl_new import validate
 
 
 def run():

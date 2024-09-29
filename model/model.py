@@ -18,6 +18,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tifffile as tiff
 from PIL import Image
+import re
 
 class RFRNetModel():
     def __init__(self):
@@ -119,7 +120,7 @@ class RFRNetModel():
     #     # Save the image using OpenCV
     #     cv2.imwrite(save_path, img_np)
     #     print(f"Image saved at {save_path}")
-
+    
     def save_batch_images_grid(self, images, save_path, nrow=8, padding=2, normalize=True):
         """
         Save a batch of images as a grid using torchvision.utils.make_grid.
@@ -215,82 +216,115 @@ class RFRNetModel():
                         save_ckpt('{:s}/g_{:d}.pth'.format(save_path, self.iter ), [('generator', self.G)], [('optimizer_G', self.optm_G)], self.iter)
                     else:
                         exit()
+    def extract_row_col(self, filename):
+        """
+        Extract row (r) and column (c) values from the filename.
+        The filename is assumed to follow the pattern: *_r{row}_c{col}.tiff
+        """
+        match = re.search(r'_r(\d+)_c(\d+)', filename)
+        if match:
+            row = match.group(1)
+            col = match.group(2)
+            return row, col
+        else:
+            raise ValueError(f"Could not extract row and col from filename: {filename}")
+
+
 
     def test(self, test_loader, result_save_path):
-        self.G.eval()
-        #print("++++checkintpoint1++++")
+        self.G.eval()  # Set the model to evaluation mode
+
         for para in self.G.parameters():
-            para.requires_grad = False
+            para.requires_grad = False  # Disable gradient computation during testing
+
         count = 0
-        #print("++++checkintpoint2++++")
         s_time = time.time()
+
+        # Create directories for saving results
+        result_save_path_recon = os.path.join(result_save_path, 'recon')
+        result_save_path_gt = os.path.join(result_save_path, 'gt')
+        result_save_path_mask = os.path.join(result_save_path, 'mask')
+        result_save_path_masked = os.path.join(result_save_path, 'masked')
+
+        # Create subdirectories within the degree folder for storing gt, mask, and recon degree CSVs
+        result_degree_save_path = os.path.join(result_save_path, 'degree')
+        result_degree_save_path_gt = os.path.join(result_degree_save_path, 'gt')
+        result_degree_save_path_mask = os.path.join(result_degree_save_path, 'mask')
+        result_degree_save_path_recon = os.path.join(result_degree_save_path, 'recon')
+
+        # Ensure the directories exist
+        os.makedirs(result_save_path_recon, exist_ok=True)
+        os.makedirs(result_save_path_gt, exist_ok=True)
+        os.makedirs(result_save_path_mask, exist_ok=True)
+        os.makedirs(result_save_path_masked, exist_ok=True)
+
+        # Ensure the degree subdirectories exist
+        os.makedirs(result_degree_save_path, exist_ok=True)
+        os.makedirs(result_degree_save_path_gt, exist_ok=True)
+        os.makedirs(result_degree_save_path_mask, exist_ok=True)
+        os.makedirs(result_degree_save_path_recon, exist_ok=True)
+
         for items in test_loader:
-            #print(test_loader)
-            #print("++++checkintpoint3++++")
-            si_time  = time.time()
-            gt_images, masks= self.__cuda__(*items)
-            # masks = self.preprocess_mask(masks)
-            #masks = masks//255.0
-            masked_images = gt_images * masks
-            #masked_images = gt_images
+            si_time = time.time()
 
-            #masks = torch.cat([masks]*3, dim = 1)
-            result_degree_save_path = os.path.join(result_save_path, 'degree')
+            # Load test images and masks
+            gt_images, masks, filenames = self.__cuda__(*items)  # Assuming filenames are passed in test_loader
 
-            folders = ['recon', 'gt', 'mask']
-            # for fold in folders:
-            #     temp = os.path.join(result_save_path, fold)
-            #     if not os.path.isdir(temp):
-            #         os.makedirs(temp)
-            #     temp = os.path.join(result_degree_save_path, fold)
-            #     if not os.path.isdir(temp):
-            #         os.makedirs(temp)
+            # Ensure the land-sea mask is applied before feeding the network
+            masks = (masks > 0).float()  # Ensure the mask is a float tensor (0 for land, 1 for ocean)
 
-            fake_B, mask = self.G(masked_images, masks)
-            comp_B = fake_B * (1 - masks) + gt_images * masks
-            if not os.path.exists('{:s}/'.format(result_save_path)):
-                os.makedirs('{:s}/'.format(result_save_path))
+            # Multiply the gt_images with land_sea_mask to ensure only ocean parts are passed through
+            masked_images = gt_images * masks 
 
+            # Forward pass: Use the masked image with the land-sea mask to exclude land during restoration
+            masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
+
+            # Save images in grid format similar to training
             for k in range(fake_B.size(0)):
                 count += 1
-                #grid = make_grid(comp_B[k:k+1])
-                # fake = fake_B[k:k+1]
-                fake = comp_B[k:k+1]
-                #print(fake)
 
-                fake_degree = fake.squeeze()
+                # Get the filename and extract the r and c values
+                filename = filenames[k]  # Assuming filenames are passed as part of the test_loader
+                row, col = self.extract_row_col(filename)  # Extract row and column from the filename
 
-                fake_degree = torch.sum(fake_degree, 0) / 3
+                # Define file prefixes for saving, using extracted row and col values
+                gt_file_prefix = f"{result_save_path_gt}/gt_{count}_r{row}_c{col}.png"
+                mask_file_prefix = f"{result_save_path_mask}/mask_{count}_r{row}_c{col}.png"
+                masked_file_prefix = f"{result_save_path_masked}/masked_{count}_r{row}_c{col}.png"
+                recon_file_prefix = f"{result_save_path_recon}/recon_{count}_r{row}_c{col}.png"
 
-                file_path = '{:s}/img_{:d}'.format(result_degree_save_path+'/recon', count)
-                np.savetxt(file_path, np.array(fake_degree.cpu()),  delimiter=",")
+                # Save images
+                self.save_batch_images_grid(gt_images[k:k+1], gt_file_prefix)        # Ground truth images
+                self.save_batch_images_grid(masked_image[k:k+1], masked_file_prefix) # Masked input images
+                self.save_batch_images_grid(comp_B[k:k+1], recon_file_prefix)        # Reconstructed images (ocean-only)
 
-                file_path = '{:s}/gt_{:d}'.format(result_degree_save_path+'/gt', count)
-                np.savetxt(file_path,np.array(gt_images[0,1,:,:].cpu()),  delimiter=",")
+                # Save the mask just like in the train() function
+                mask_grid = masks[k:k+1]  # Extract the mask for the current image batch
+                self.save_batch_images_grid(mask_grid, mask_file_prefix, nrow=1, padding=2, normalize=True)  # Save mask as a grid
 
-                file_path = '{:s}/mask_{:d}'.format(result_degree_save_path+'/mask', count)
-                np.savetxt(file_path,np.array(masks[0,1,:,:].cpu()),  delimiter=",")
+                # Calculate degree values by averaging across channels and save as CSV files
+                fake_degree = fake_B[k].mean(dim=0).cpu().numpy()  # Calculate mean across channels for degree
+                gt_degree = gt_images[k, 1, :, :].cpu().numpy()    # Get the second channel (assuming it's needed for degree)
+                mask_degree = masks[k, 1, :, :].cpu().numpy()      # Get the second channel for the mask
 
+                # Save degree-related data (img, gt, mask) as CSV files, using row and col in the filenames
+                file_path = f'{result_degree_save_path_recon}/img_{count}_r{row}_c{col}.csv'
+                np.savetxt(file_path, fake_degree, delimiter=",")  # Save fake_B (reconstructed image)
 
-                file_path = '{:s}/img_{:d}.png'.format(result_save_path+'/recon', count)
-                save_image(fake, file_path)
+                file_path = f'{result_degree_save_path_gt}/gt_{count}_r{row}_c{col}.csv'
+                np.savetxt(file_path, gt_degree, delimiter=",")  # Save ground truth
 
-                file_path = '{:s}/gt_images{:d}.png'.format(result_save_path+'/gt', count)
-                save_image(gt_images, file_path)
+                file_path = f'{result_degree_save_path_mask}/mask_{count}_r{row}_c{col}.csv'
+                np.savetxt(file_path, mask_degree, delimiter=",")  # Save mask
 
-                file_path = '{:s}/masked_img_{:d}.png'.format(result_save_path+'/mask', count)
-                save_image(masked_images, file_path)
+            ei_time = time.time()
+            i_time = ei_time - si_time
+            print(f"Processed img#{count} in {i_time:.2f}s")
 
-                #self.save_img(fake, file_path)
-                #grid = make_grid(masked_images[k:k+1] +1 - masks[k:k+1] )
-                #file_path = '{:s}/masked_img_{:d}.png'.format(result_save_path, count)
-                #save_image(grid, file_path)
-            ei_time  = time.time()
-            i_time = ei_time-si_time
-            print("img#"+str(count)+" : %.2f"%(i_time))
         e_time = time.time()
-        int_time = e_time - s_time
-        print("total time taken : %.2f"%(int_time))
+        total_time = e_time - s_time
+        print(f"Total time taken: {total_time:.2f}s")
+
 
     def forward(self, masked_image, mask, gt_image):
         self.real_A = masked_image
@@ -300,6 +334,21 @@ class RFRNetModel():
         self.fake_B = fake_B
         self.comp_B = self.fake_B * (1 - mask) + self.real_B * mask
         return masked_image, self.fake_B, self.comp_B
+
+    # def forward(self, masked_image, mask, gt_image):
+    #     self.real_A = masked_image
+    #     self.real_B = gt_image
+    #     self.mask = mask
+
+    #     # Apply land-sea mask to exclude land areas from restoration
+    #     land_sea_mask = mask.clone()  # Copy the mask (assuming the mask is where land = 0, ocean = 1)
+    #     fake_B, _ = self.G(masked_image * land_sea_mask, mask)  # Ensure land is excluded during restoration
+
+    #     self.fake_B = fake_B
+    #     self.comp_B = self.fake_B * (1 - mask) + self.real_B * mask  # Combine the reconstructed ocean with land preserved
+    #     return masked_image, self.fake_B, self.comp_B
+
+
     def update_parameters(self):
         self.update_G()
         self.update_D()
@@ -404,4 +453,11 @@ class RFRNetModel():
         return loss_value
 
     def __cuda__(self, *args):
-        return (item.to(self.device) for item in args)
+        result = []
+        for item in args:
+            if isinstance(item, torch.Tensor):
+                result.append(item.to(self.device))
+            else:
+                result.append(item)  # If it's not a tensor (like a filename), just append it
+        return result
+

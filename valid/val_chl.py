@@ -105,7 +105,7 @@ def plot_parity(filename, loss_rate,true, pred, rmse_, mae_, kind="scatter",
     return ax
 
 
-def validate(loss_rate, path_list):
+# def validate(loss_rate, path_list):
 step = input()
 loss_rate = 30
 

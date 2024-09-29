@@ -21,6 +21,12 @@ GOCI test
 
 current===>  python3 run.py --data_root data/GOCI_RRS/Rrs_test/2021/gt/3 --mask_root data/GOCI_RRS/Rrs_test/2021/Rrs_mask/3/50 --result_save_path results/ay_rrs_goci/2021/3/50/ --model_path /home/pmilab/Desktop/RFR/models/test_models/3/g_550000.pth --test --mask_mode 2
 
+python3 run.py --data_root /media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs_patch_by_loss/band_2  \
+               --mask_root /home/juneyonglee/gocirrs_backup/home/pmilab/Documents/GOCI_recon/GOCI_RRS_degree/2  \
+               --result_save_path /home/juneyonglee/Desktop/AY_ust/model/results/goci_rrs  \
+               --model_path /home/juneyonglee/Desktop/AY_ust/model/models/03south/g_440000.pth \
+               --test \
+               --mask_mode 2
 
 
 

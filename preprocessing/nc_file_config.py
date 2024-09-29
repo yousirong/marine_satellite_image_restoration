@@ -30,6 +30,7 @@ print_group_info(f)
 f.close()
 
 '''
+   <UST21>
 (unir) juneyonglee@juneyonglee-RTX3090-2:~/Desktop/AY_ust$ python preprocessing/nc_file_config.py
 Variables: dict_keys([])
 Dimensions: dict_keys(['number_of_lines', 'pixels_per_line', 'bands_per_pixel', 'number_of_reflectance_location_values', 'pixel_control_points', 'number_of_bands', 'number_of_reflective_bands'])
@@ -99,7 +100,7 @@ Group: /
     
 
 
-    GOCI 관련 
+    <GOCI 관련>
  (unir) juneyonglee@juneyonglee-RTX3090-2:~/Desktop/AY_ust$ python preprocessing/nc_file_config.py
 Variables: dict_keys([])
 Dimensions: dict_keys([])
