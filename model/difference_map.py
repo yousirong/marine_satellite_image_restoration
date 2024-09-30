@@ -24,25 +24,33 @@ def normalize_and_apply_colormap(data, vmin=-20, vmax=20, cmap='coolwarm'):
     return colored_data
 
 def save_difference_image(diff, save_path):
-    # Normalize and apply the colormap
-    colored_diff = normalize_and_apply_colormap(diff)
-    
-    # Save the resulting image
+    # Normalize the data to be within the specified range (-20 to 20)
+    norm = Normalize(vmin=-20, vmax=20)
+
+    # Use the 'jet' colormap and set bad values (e.g., NaN) to white
+    cmap = plt.cm.get_cmap("jet").copy()
+    cmap.set_bad('white', 1.0)
+
+    # Apply the colormap to the difference data
+    colored_diff = cmap(norm(diff))[:, :, :3]  # Ignore the alpha channel
+
+    # Save the resulting image as a PNG file
     save_path_with_extension = save_path if save_path.lower().endswith('.png') else save_path + '.png'
     plt.imsave(save_path_with_extension, colored_diff)
-    
+
     # Display the image with the updated color bar
-    plt.imshow(diff, cmap='coolwarm', norm=Normalize(vmin=-20, vmax=20))
+    plt.imshow(diff, cmap=cmap, norm=norm)
     plt.colorbar(label='Chlorophyll-a concentration difference (mg/m³)')
     plt.title('Chlorophyll-a Concentration Difference')
 
     # Remove the axis ticks and labels
     plt.xticks([])
     plt.yticks([])
-    
+
     # Save the image with the color bar
     plt.savefig(save_path_with_extension.replace('.png', '_bar.png'), dpi=300, bbox_inches='tight')
     plt.close()
+
 
 def process_images(recon_path, save_path):
     # Get list of files and exclude those with '_bar' in their names

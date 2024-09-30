@@ -17,8 +17,8 @@ data_path: model/results/ust21_chl_8day_perfect/600000/50
 
 #  60 example
 #  model/results/ust_chl_4_perfect/600000/60
-
-save_path: model/performance/ust_chl_4_perfect_rawpixel
+land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
+save_path: model/performance/ex
 gpu_ids: [0, 1]
 
-
+# python model/run.py --c configs/val.yaml --val

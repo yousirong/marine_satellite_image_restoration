@@ -56,7 +56,8 @@ class Dataset(torch.utils.data.Dataset):
     def load_item(self, index):
         # Load the image (GT)
         img = cv2.imread(self.data[index], cv2.IMREAD_UNCHANGED)
-        print(f"Image loaded: {self.data[index]}, dtype: {img.dtype}, shape: {img.shape}")
+        # test 할경우 주석 풀기 
+        # print(f"Image loaded: {self.data[index]}, dtype: {img.dtype}, shape: {img.shape}")
 
         # Replace NaNs with 0
         img[np.isnan(img)] = 0
@@ -65,6 +66,10 @@ class Dataset(torch.utils.data.Dataset):
         if img.dtype == object:
             print(f"Converting image dtype from object to float32 for: {self.data[index]}")
             img = img.astype(np.float32)
+
+        # Resize the image to the target size if it's not the correct size
+        if img.shape[0] != self.target_size or img.shape[1] != self.target_size:
+            img = cv2.resize(img, (self.target_size, self.target_size))
 
         # Ensure the image has 3 channels
         if len(img.shape) == 2:  # Grayscale image
@@ -80,6 +85,10 @@ class Dataset(torch.utils.data.Dataset):
 
         # Get the land-sea mask patch corresponding to the GT image
         land_sea_mask_patch = self.get_land_sea_mask_patch(img, index, land_sea_mask)
+
+        # Ensure the land-sea mask patch is resized to match the target size
+        if land_sea_mask_patch.shape[1] != self.target_size or land_sea_mask_patch.shape[2] != self.target_size:
+            land_sea_mask_patch = cv2.resize(land_sea_mask_patch, (self.target_size, self.target_size))
 
         # Step 4: Modify the mask (set sea areas where mask is 0 to 255)
         land_removed_mask = self.remove_land_from_mask(mask, land_sea_mask_patch)
@@ -116,9 +125,8 @@ class Dataset(torch.utils.data.Dataset):
         # Apply mask reversal if specified
         if self.mask_reverse:
             mask = 1 - mask
-
         return mask
-
+    
     def get_land_sea_mask_patch(self, img, index, land_sea_mask):
         """
         Extract the land-sea mask patch that corresponds to the current image based on row and col.
@@ -170,12 +178,19 @@ class Dataset(torch.utils.data.Dataset):
         # land_sea_mask = np.where(land_sea_mask == 0, 999, 1)
         return land_sea_mask
 
+    # 기존 ust21 resize
+    # def resize(self, img, aspect_ratio_kept=True, fixed_size=False, centerCrop=False):
+    #     """
+    #     Resize the image to the target size.
+    #     """
+    #     imgh, imgw = img.shape[:2]
+    #     img = np.array(Image.fromarray(img).resize(size=(self.target_size, self.target_size)))
+    #     return img
     def resize(self, img, aspect_ratio_kept=True, fixed_size=False, centerCrop=False):
         """
         Resize the image to the target size.
         """
-        imgh, imgw = img.shape[:2]
-        img = np.array(Image.fromarray(img).resize(size=(self.target_size, self.target_size)))
+        img = cv2.resize(img, (self.target_size, self.target_size))
         return img
 
     # def to_tensor(self, img):

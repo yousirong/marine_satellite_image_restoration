@@ -1,0 +1,5 @@
+preprocessing/is_land_on_GOCI_modified_1_999.npy filter=lfs diff=lfs merge=lfs -text
+preprocessing/is_land_on_GOCI.npy filter=lfs diff=lfs merge=lfs -text
+preprocessing/Land_mask filter=lfs diff=lfs merge=lfs -text
+preprocessing/Land_mask/Land_mask.mat filter=lfs diff=lfs merge=lfs -text
+preprocessing/Land_mask/Land_mask.npy filter=lfs diff=lfs merge=lfs -text

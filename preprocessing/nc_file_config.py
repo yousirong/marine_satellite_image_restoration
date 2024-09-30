@@ -3,9 +3,9 @@ import netCDF4 as nc
 
 # NetCDF 파일 경로
 # path = '/media/juneyonglee/My Book/VIIRS/VIIRS-SNPP/OC/2013/01/01/SNPP_VIIRS.20130101T035400.L2.OC.nc'
-# path = '/media/juneyonglee/My Book/MODIS/MODIS-Aqua/OC/2012/01/01/AQUA_MODIS.20120101T031000.L2.OC.nc'
+path = '/home/juneyonglee/Downloads/AQUA_MODIS.20120101_20120108.L3m.8D.CHL.chlor_a.4km.nc'
 # path = '/media/juneyonglee/My Book/UST21/Daily/2012/01/UST21_L3_Merged-Chla-1D_20120104.nc'
-path = '/home/juneyonglee/Documents/COMS_GOCI_L2A_GA_20110401001641.RRS.he5'
+# path = '/home/juneyonglee/Documents/COMS_GOCI_L2A_GA_20110401001641.RRS.he5'
 def print_group_info(group, indent=0):
     indent_str = "  " * indent
     print(f"{indent_str}Group: {group.path}")
@@ -98,7 +98,21 @@ Group: /
     Group: /processing_control/flag_percentages
 
     
-
+<MODIS 8day 관련>
+Variables: dict_keys(['chlor_a', 'lat', 'lon', 'palette'])
+Dimensions: dict_keys(['lat', 'lon', 'rgb', 'eightbitcolor'])
+Groups: dict_keys(['processing_control'])
+Group: /
+  Variable: chlor_a (4320, 8640) float32
+  Variable: lat (4320,) float32
+  Variable: lon (8640,) float32
+  Variable: palette (3, 256) uint8
+  Dimension: lat 4320
+  Dimension: lon 8640
+  Dimension: rgb 3
+  Dimension: eightbitcolor 256
+  Group: /processing_control
+    Group: /processing_control/input_parameters
 
     <GOCI 관련>
  (unir) juneyonglee@juneyonglee-RTX3090-2:~/Desktop/AY_ust$ python preprocessing/nc_file_config.py

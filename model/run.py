@@ -40,7 +40,7 @@ def run():
         model.test(dataloader, args.result_save_path)
 
     elif args.val:
-        validate(args.loss_rate, args.data_path, args.performance_save_path)
+        validate(args.loss_rate, args.data_path, args.performance_save_path, args.land_sea_mask_path)
 
     else:
         model.initialize_model(args.model_path, True, args.model_save_path, args.gpu_ids)

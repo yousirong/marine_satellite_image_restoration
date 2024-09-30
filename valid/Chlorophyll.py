@@ -1,76 +1,76 @@
-from PIL import Image
-import cv2
 import os
-import math
 import numpy as np
 import glob
+from tqdm import trange
 
-#rrs_path_1 = './interpolation/rrs_test/2/50'
-#rrs_path_2 = './interpolation/rrs_test/3/50'
-#rrs_path_3 ='./interpolation/rrs_test/4/50'
-#rrs_mask ='/media/pmilab/3dbe7506-c248-4dac-a1f3-866a0bc3ecf8/home/pmimoon/Documents/RFR/data/GOCI_RRS/Rrs_test/2021/Rrs_mask/3/50'
-#save_path = 'interpolation/chl/50/'
+# 현재 사용 중인 경로 설정
+rrs_path_1 = 'model/results/band2_loss_20/600000/10'
+rrs_path_2 = 'model/results/band3_loss_20/600000/10'  # 2번째 밴드 경로
+rrs_path_3 = 'model/results/band4_loss_20/600000/10'  # 3번째 밴드 경로
+save_path = 'model/results/GOCI_chl/600000/10'
 
-#current
-rrs_path_1 = './basic_interpolation/2021/rrs_test/2/50'
-rrs_path_2 = './basic_interpolation/2021/rrs_test/3/50'
-rrs_path_3 ='./basic_interpolation/2021/rrs_test/4/50'
-rrs_mask ='/home/pmilab/Desktop/RFR/data/GOCI_RRS/Rrs_test/2021/Rrs_mask/3/50'
-save_path = './basic_interpolation/ay_chl/50/'
-
+# 결과 저장 폴더 생성
 if not os.path.isdir(save_path):
     os.makedirs(save_path)
 else:
     print("Folder already exists")
 
-mask_files_list = glob.glob(os.path.join(rrs_mask, '*'), recursive=True)
-rrs1_files_list = glob.glob(os.path.join(rrs_path_1, '*'), recursive=True)
-rrs2_files_list = glob.glob(os.path.join(rrs_path_2, '*'), recursive=True)
-rrs3_files_list = glob.glob(os.path.join(rrs_path_3, '*'), recursive=True)
+# RRS 파일 리스트 가져오기
+rrs1_files_list = glob.glob(os.path.join(rrs_path_1, '*'), recursive=True) if os.path.exists(rrs_path_1) else []
+rrs2_files_list = glob.glob(os.path.join(rrs_path_2, '*'), recursive=True) if os.path.exists(rrs_path_2) else []
+rrs3_files_list = glob.glob(os.path.join(rrs_path_3, '*'), recursive=True) if os.path.exists(rrs_path_3) else []
 
-#image_path = "COMS_GOCI_L2A_GA_20200210021642._r4096_c1792"
-data_type = ['443', '490', '555']
-from tqdm import trange
-for i in trange(len(rrs1_files_list)):
+# 클로로필 계산을 위한 계수
+a = [0.2515, -2.3798, 1.5823, -0.6372, -0.5692]
 
-    img = []
-    f_name = rrs2_files_list[i].split('/')
-    f_name = f_name[-1]
-    #f_name = f_name[:-5]
-    #print(rrs1_files_list[i]) 
-    #print(rrs2_files_list[i]) 
-    #print(rrs3_files_list[i]) 
-    #print("@@@@")
-    rrs1 = np.loadtxt(rrs1_files_list[i], delimiter=',',dtype='float32')/255
-    rrs2 = np.loadtxt(rrs2_files_list[i], delimiter=',',dtype='float32')/255
-    rrs3 = np.loadtxt(rrs3_files_list[i], delimiter=',',dtype='float32')/255
-    img.append(rrs1)
-    img.append(rrs2)
-    img.append(rrs3)
-    
-    #mask = np.loadtxt(mask_files_list[i], delimiter=',',dtype='float32')
-    mask = cv2.imread(mask_files_list[i], cv2.IMREAD_GRAYSCALE)
-    '''
-    for i, typ in enumerate(data_type):
-        img_name = image_path + '_' + str(typ) + '.tiff'
-        assert os.path.exists(img_name), f"{img_name} 파일이 존재하지 않습니다."
-        img.append(cv2.imread(img_name, cv2.IMREAD_UNCHANGED))
-    '''
-    R_rs = np.stack(img, axis=0)
-    _, height, width = R_rs.shape
+# 각 경로 존재 여부 출력
+if not rrs1_files_list:
+    print(f"{rrs_path_1} 경로가 존재하지 않거나 파일이 없습니다. 이 경로를 건너뜁니다.")
+if not rrs2_files_list:
+    print(f"{rrs_path_2} 경로가 존재하지 않거나 파일이 없습니다. 이 경로를 건너뜁니다.")
+if not rrs3_files_list:
+    print(f"{rrs_path_3} 경로가 존재하지 않거나 파일이 없습니다. 이 경로를 건너뜁니다.")
 
-    a = [0.2515, -2.3798, 1.5823, -0.6372, -0.5692]
+# 모든 경로가 비어있으면 종료
+if not rrs1_files_list or not rrs2_files_list or not rrs3_files_list:
+    print("처리할 파일이 없습니다. 프로그램을 종료합니다.")
+else:
+    # 파일 순회하며 처리
+    for i in trange(len(rrs1_files_list)):
+        if i >= len(rrs2_files_list) or i >= len(rrs3_files_list):
+            print(f"인덱스 {i}에 해당하는 RRS2 또는 RRS3 파일이 없습니다. 건너뜁니다.")
+            continue
 
-    Chl_oc3 = np.empty((height,width))
+        img = []
+        f_name = os.path.basename(rrs1_files_list[i])
 
-    for h in range(height):
-        for w in range(width):
-            if R_rs[2, h, w] <= 0 or R_rs[0, h, w] <= 0 or R_rs[1, h, w] <= 0:
-                Chl_oc3[h,w] = 0
-            else:
-                term = np.sum(a[i] * (np.log10(np.max(R_rs[:2,h,w])/R_rs[2,h,w]))**i for i in range(1, 5))
-                Chl_oc3[h,w] = 10 ** (a[0] + term)
-                #print(Chl_oc3[h,w])
-    np.savetxt(save_path+f_name, Chl_oc3)
-        
-#print(img.shape)
+        # RRS 데이터를 읽어서 0-1 사이 값으로 변환 (각 밴드 처리)
+        rrs1 = np.loadtxt(rrs1_files_list[i], delimiter=',', dtype='float32') / 255
+        rrs2 = np.loadtxt(rrs2_files_list[i], delimiter=',', dtype='float32') / 255
+        rrs3 = np.loadtxt(rrs3_files_list[i], delimiter=',', dtype='float32') / 255
+
+        # 세 개의 밴드를 img에 추가
+        img.append(rrs1)
+        img.append(rrs2)
+        img.append(rrs3)
+
+        # R_rs 3차원 배열로 쌓기
+        R_rs = np.stack(img, axis=0)  # (3, height, width)
+        _, height, width = R_rs.shape
+
+        # 클로로필 값을 저장할 배열 생성
+        Chl_oc3 = np.empty((height, width))
+
+        # 클로로필 값을 계산하여 저장
+        for h in range(height):
+            for w in range(width):
+                # 육지 영역을 마스크로 제외한 후 클로로필 계산
+                if R_rs[2, h, w] <= 0 or R_rs[0, h, w] <= 0 or R_rs[1, h, w] <= 0:
+                    Chl_oc3[h, w] = 0
+                else:
+                    term = np.sum(a[i] * (np.log10(np.max(R_rs[:2, h, w]) / R_rs[2, h, w])) ** i for i in range(1, 5))
+                    Chl_oc3[h, w] = 10 ** (a[0] + term)
+
+        # 계산된 클로로필 값을 콤마로 구분하여 저장
+        np.savetxt(os.path.join(save_path, f_name), Chl_oc3, delimiter=',')
+        print(f"Chlorophyll map saved at {os.path.join(save_path, f_name)}")

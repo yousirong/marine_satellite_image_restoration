@@ -1,13 +1,32 @@
+# # ust21 
+# batch_size: 1
+# data_root: /media/juneyonglee/My Book/Preprocessed/UST/Chl-a_8day/test/ex
+# gpu_ids:
+# - 0
+# - 1
+# land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
+# mask_mode: 2
+# mask_root: /media/juneyonglee/My Book/data/mask/Test/10
+# max_epochs: null
+# model_path: model/models/ust21_chl_8day/g_600000.pth
+# model_save_path: null
+# n_threads: 6
+# num_iters: 800000
+# num_workers: 16
+# target_size: 256
+# warmup_batchs: 1500
+
+# goci 
 batch_size: 1
-data_root: /media/juneyonglee/My Book/Preprocessed/UST/Chl-a_8day/test/perfect
+data_root: /media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs_patch_by_loss/band_4/loss_20
 gpu_ids:
 - 0
 - 1
-land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
+land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy
 mask_mode: 2
-mask_root: /media/juneyonglee/My Book/data/mask/Test/50
+mask_root: /media/juneyonglee/My Book/data/mask/Test/10
 max_epochs: null
-model_path: model/models/ust21_chl_8day/g_600000.pth
+model_path: model/models/band4/g_600000.pth
 model_save_path: null
 n_threads: 6
 num_iters: 800000

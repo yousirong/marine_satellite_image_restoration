@@ -73,54 +73,7 @@ class RFRNetModel():
                 self.lossNet.cuda()
         else:
             self.device = torch.device("cpu")
-    # def save_img(self, img, file_path):
-    #     '''
 
-    #     img_min = np.min(img)
-    #     img_max = np.max(img)
-
-    #     #min-max normalization
-    #     out_img = (img-img_min)/(img_max-img_min)
-    #     out_img = out_img*255
-    #     '''
-    #     img = img.cpu().numpy()
-    #     #gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    #     gray_img = img *255.
-    #     cv2.imwrite(file_path, gray_img)
-    # def save_image_cv2(self, tensor, save_path, normalize=False):
-    #     """
-    #     Save a PyTorch tensor as an image using OpenCV's cv2.imwrite.
-
-    #     Args:
-    #         tensor (torch.Tensor): A PyTorch tensor representing an image (C, H, W) or (B, C, H, W)
-    #         save_path (str): The path where the image should be saved.
-    #         normalize (bool): If True, normalize the tensor values to the 0-255 range for visualization.
-    #     """
-    #     if not isinstance(tensor, torch.Tensor):
-    #         raise ValueError(f"Expected tensor to be a torch.Tensor object, but got: {type(tensor)}")
-
-    #     # Check if tensor is batched
-    #     if tensor.ndimension() == 4:  # (B, C, H, W)
-    #         tensor = tensor[0]  # Take the first image from the batch
-
-    #     # Normalize the tensor to 0-255 for visualization if necessary
-    #     if normalize:
-    #         tensor = (tensor - tensor.min()) / (tensor.max() - tensor.min()) * 255
-
-    #     # Convert tensor to NumPy array and change format from (C, H, W) to (H, W, C)
-    #     img_np = tensor.detach().permute(1, 2, 0).cpu().numpy().astype(np.uint8)
-
-    #     # Handle single-channel (grayscale) images separately
-    #     if img_np.shape[2] == 1:
-    #         img_np = img_np.squeeze(axis=2)
-
-    #     # Ensure the directory exists before saving
-    #     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-
-    #     # Save the image using OpenCV
-    #     cv2.imwrite(save_path, img_np)
-    #     print(f"Image saved at {save_path}")
-    
     def save_batch_images_grid(self, images, save_path, nrow=8, padding=2, normalize=True):
         """
         Save a batch of images as a grid using torchvision.utils.make_grid.
@@ -150,8 +103,7 @@ class RFRNetModel():
         print(f"Image grid saved at {save_path}")
 
     
-    def train(self, train_loader, save_path, store_capacity=10, finetune = False, iters=800000):
-    #    writer = SummaryWriter(log_dir="log_info")
+    def train(self, train_loader, save_path, store_capacity=10, finetune=False, iters=800000):
         count = 0
         self.G.train()
         if finetune:
@@ -163,30 +115,41 @@ class RFRNetModel():
         print("Starting training from iteration:{:d}".format(self.iter))
         s_time = time.time()
 
-        # while self.iter<iters:
         while True:
             for items in train_loader:
-                gt_images, masks = self.__cuda__(*items)
+                # Unpack the batch properly based on the number of items
+                if len(items) == 2:
+                    gt_images, masks = self.__cuda__(*items)
+                elif len(items) == 3:  # If there is an additional item, like filenames
+                    gt_images, masks, filenames = self.__cuda__(*items)
+                else:
+                    raise ValueError(f"Expected 2 or 3 items, but got {len(items)}")
+                
+                # Ensure the land-sea mask is applied before feeding the network
+                masks = (masks > 0).float()  # Ensure the mask is a float tensor (0 for land, 1 for ocean)
 
+                # Masked image generation
                 masked_images = gt_images * masks
 
+                # Forward pass
                 masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
 
+                # Update parameters
                 self.update_parameters()
                 self.iter += 1
 
-                if self.iter % 5000 == 0:  
+                if self.iter % 5000 == 0:
                     e_time = time.time()
                     int_time = e_time - s_time
-                    print("Iteration:%d, l1_loss:%.4f, time_taken:%.2f" %(self.iter, self.l1_loss_val/50, int_time))
+                    print("Iteration:%d, l1_loss:%.4f, time_taken:%.2f" % (self.iter, self.l1_loss_val / 50, int_time))
                     self.writer.add_scalar("Train/Loss", self.l1_loss_val, self.iter)
                     s_time = time.time()
                     self.l1_loss_val = 0.0
+
                 # Save image grid every 10000 iterations
                 if self.iter % 10000 == 0:
-                    # Ensure images are saved to the correct path: 'ust21_chl_8day'
                     save_directory = os.path.join(save_path, 'training')
-                    os.makedirs(save_directory, exist_ok=True)  # Ensure the directory exists
+                    os.makedirs(save_directory, exist_ok=True)
 
                     file_prefix = f"{save_directory}/{os.path.basename(save_path)}_{self.iter}"
                     self.save_batch_images_grid(gt_images, f"{file_prefix}_gt")
@@ -194,28 +157,16 @@ class RFRNetModel():
                     self.save_batch_images_grid(fake_B, f"{file_prefix}_fake")
                     self.save_batch_images_grid(masked_image, f"{file_prefix}_masked")
                     self.save_batch_images_grid(masks, f"{file_prefix}_masks")
-                # if self.iter % 1000==0 :
-                #     file_path = '{:s}/gt_img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}', self.iter)
-                #     self.save_batch_images_cv2(gt_images, file_path)
 
-                #     file_path = '{:s}/img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}', self.iter)
-                #     self.save_batch_images_cv2(comp_B, file_path)
-
-                #     file_path = '{:s}/fake_img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}', self.iter)
-                #     self.save_batch_images_cv2(fake_B, file_path)
-
-                #     file_path = '{:s}/masked_img_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}',self.iter)
-                #     self.save_batch_images_cv2(masked_image, file_path)
-
-                #     file_path = '{:s}/mask_{:d}.png'.format(f'./model/training/{os.path.basename(save_path)}',self.iter)
-                #     self.save_batch_images_cv2(masks, file_path)
-                if self.iter % 1000 == 0:   # pth 저장되는 단위
-                    if not os.path.exists('{:s}'.format(save_path)):
-                        os.makedirs('{:s}'.format(save_path))
+                # Save model checkpoint every 1000 iterations
+                if self.iter % 1000 == 0:
+                    if not os.path.exists(save_path):
+                        os.makedirs(save_path)
                     if is_available_to_store(store_capacity):
-                        save_ckpt('{:s}/g_{:d}.pth'.format(save_path, self.iter ), [('generator', self.G)], [('optimizer_G', self.optm_G)], self.iter)
+                        save_ckpt(f'{save_path}/g_{self.iter}.pth', [('generator', self.G)], [('optimizer_G', self.optm_G)], self.iter)
                     else:
                         exit()
+                        
     def extract_row_col(self, filename):
         """
         Extract row (r) and column (c) values from the filename.
@@ -334,20 +285,6 @@ class RFRNetModel():
         self.fake_B = fake_B
         self.comp_B = self.fake_B * (1 - mask) + self.real_B * mask
         return masked_image, self.fake_B, self.comp_B
-
-    # def forward(self, masked_image, mask, gt_image):
-    #     self.real_A = masked_image
-    #     self.real_B = gt_image
-    #     self.mask = mask
-
-    #     # Apply land-sea mask to exclude land areas from restoration
-    #     land_sea_mask = mask.clone()  # Copy the mask (assuming the mask is where land = 0, ocean = 1)
-    #     fake_B, _ = self.G(masked_image * land_sea_mask, mask)  # Ensure land is excluded during restoration
-
-    #     self.fake_B = fake_B
-    #     self.comp_B = self.fake_B * (1 - mask) + self.real_B * mask  # Combine the reconstructed ocean with land preserved
-    #     return masked_image, self.fake_B, self.comp_B
-
 
     def update_parameters(self):
         self.update_G()

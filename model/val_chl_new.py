@@ -11,6 +11,8 @@ from matplotlib import cm
 from matplotlib.colors import Normalize
 import re
 
+land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy'
+
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
 
@@ -103,51 +105,6 @@ def plot_parity(filename, loss_rate, true, pred, rmse_, mape_, kind="scatter",
     plt.show()
     return ax
 
-def save_colormap_image(data, save_path, vmin=0, vmax=20):
-    """
-    Save the Chlorophyll-a image with normalization between 0 and 20.
-    Black (land/invalid) areas will remain black, and other areas will be color-mapped.
-    """
-    # Create a copy to avoid modifying the original data
-    data_clipped = data.copy()
-
-    # Set 255 (land) to NaN so it doesn't interfere with the normalization
-    land_mask = (data_clipped == 255)  # Assuming 255 represents land/no-data
-    data_clipped[land_mask] = np.nan  # Assign NaN to 255 values (land)
-
-    # Clip the non-land data to the range [vmin, vmax] and normalize
-    data_normalized = np.clip(data_clipped, vmin, vmax)
-
-    # Normalize the clipped data for colormap mapping
-    norm = Normalize(vmin=vmin, vmax=vmax)
-    colormap = cm.ScalarMappable(norm=norm, cmap='viridis')
-
-    # Convert the normalized data into RGB format using the colormap
-    colored_img = colormap.to_rgba(data_normalized)[:, :, :3]  # Use only RGB values (omit alpha)
-
-    # Set land (previously NaN) to black
-    colored_img[land_mask] = [0, 0, 0]  # Set black for land (RGB)
-
-    # Ensure the save path has the correct extension and remove .csv from the filename if present
-    save_path_with_extension = save_path if save_path.lower().endswith('.png') else save_path + '.png'
-    save_path_with_extension = save_path_with_extension.replace('.csv', '')  # Remove .csv from filename
-
-    # Save the colored image
-    plt.imsave(save_path_with_extension, colored_img)
-
-    # Display the image with a color bar (between vmin and vmax)
-    plt.imshow(data_normalized, cmap='viridis', vmin=vmin, vmax=vmax)
-    plt.colorbar(label='Chlorophyll-a concentration (mg/m³)', ticks=np.linspace(vmin, vmax, num=5))
-    plt.title(f'Restored Chlorophyll-a Concentration')
-
-    # Remove axis ticks and labels
-    plt.xticks([])
-    plt.yticks([])
-
-    # Save the image with the color bar
-    plt.savefig(save_path_with_extension.replace('.png', '_bar.png'), dpi=300, bbox_inches='tight')
-    plt.close()
-
 
 def normalize_data(data, vmin=0, vmax=20):
     """
@@ -170,13 +127,92 @@ def normalize_data(data, vmin=0, vmax=20):
 
     return data_normalized
 
-def validate(loss_rate, data_path, save_path):
+def save_land_mask_image(land_mask_cropped, save_path):
+    """
+    Save the cropped land-sea mask as an image, where land is black (255) and sea is white (0).
+    """
+    # Create a binary mask image (land as black, sea as white)
+    mask_img = land_mask_cropped 
 
+    # # Ensure the save path has the correct extension and remove .csv from the filename if present
+    # save_path_with_extension = save_path if save_path.lower().endswith('.png') else save_path + '_mask.png'
+    # save_path_with_extension = save_path_with_extension.replace('.csv', '')  # Remove .csv from filename
+
+    # # Save the mask image
+    # plt.imsave(save_path_with_extension, mask_img, cmap='gray')
+
+    # # Display the mask image
+    # plt.imshow(mask_img, cmap='gray')
+    # plt.title(f'Land-Sea Mask')
+    # plt.xticks([])
+    # plt.yticks([])
+    
+    # # Save the mask image with a proper title
+    # plt.savefig(save_path_with_extension.replace('.png', '_mask_bar.png'), dpi=300, bbox_inches='tight')
+    # plt.close()
+
+
+def save_colormap_image_with_land_mask(data, land_sea_mask_path, row, col, save_path, vmin=0, vmax=20, land_color=[0, 0, 0]):
+    """
+    Save the Chlorophyll-a image with normalization between 0 and 20.
+    Land areas will be marked as black (or another specified color), and other areas will be color-mapped.
+    Apply the land mask (256x256) to the image to mark land areas.
+    """
+    # Load the land-sea mask
+    land_mask_full = np.load(land_sea_mask_path)
+
+    # Crop the land mask based on row and col (assuming 256x256 crops)
+    land_mask_cropped = land_mask_full[row:row + 256, col:col + 256]
+
+    # Create a copy of the data to avoid modifying the original
+    data_clipped = data.copy()
+
+    # Set land (1 in the mask) to NaN so it doesn't interfere with the normalization
+    land_mask = (land_mask_cropped == 1)  # Assuming 1 represents land, 0 represents sea
+
+    # Clip the non-land data to the range [vmin, vmax] and normalize
+    data_normalized = np.clip(data_clipped, vmin, vmax)
+
+    # Normalize the clipped data for colormap mapping
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    colormap = cm.ScalarMappable(norm=norm, cmap='jet')  # Ensure consistent colormap ('jet')
+
+    # Convert the normalized data into RGB format using the colormap
+    colored_img = colormap.to_rgba(data_normalized)[:, :, :3]  # Use only RGB values (omit alpha)
+
+    # Set land (previously NaN) to the specified land color (default is black)
+    colored_img[land_mask] = land_color  # Set the color for land (RGB)
+
+    # Ensure the save path has the correct extension and remove .csv from the filename if present
+    save_path_with_extension = save_path if save_path.lower().endswith('.png') else save_path + '.png'
+    save_path_with_extension = save_path_with_extension.replace('.csv', '')  # Remove .csv from filename
+
+    # Save the colored image
+    plt.imsave(save_path_with_extension, colored_img)
+
+    # Use consistent colormap for display ('jet' in this case)
+    cmap = plt.get_cmap("jet")  # Use 'jet' to match the saved image
+    cmap.set_bad('white', 1.0)
+
+    # Display the image with a color bar (between vmin and vmax)
+    plt.imshow(data_normalized, cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.colorbar(label='Chlorophyll-a concentration (mg/m³)', ticks=np.linspace(vmin, vmax, num=5))
+    plt.title(f'Restored Chlorophyll-a Concentration with Land Mask')
+
+    # Remove axis ticks and labels
+    plt.xticks([])
+    plt.yticks([])
+
+    # Save the image with the color bar
+    plt.savefig(save_path_with_extension.replace('.png', '_bar.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+
+def validate(loss_rate, data_path, save_path, land_sea_mask_path):
     recon_path = os.path.join(data_path, 'recon')
     gt_path = os.path.join(data_path, 'gt')
     mask_path = os.path.join(data_path, 'mask')
     assert os.path.isdir(recon_path) and os.path.isdir(gt_path) and os.path.isdir(mask_path), "Please check dataset path is valid"
-    
+
     color_image_path = os.path.join(save_path, f'color_{loss_rate}')
     if not os.path.exists(color_image_path):
         os.makedirs(color_image_path)
@@ -184,11 +220,11 @@ def validate(loss_rate, data_path, save_path):
     recon_files_list = sorted(glob.glob(os.path.join(recon_path, '*.csv')), key=natural_sort_key)
     gt_files_list = sorted(glob.glob(os.path.join(gt_path, '*.csv')), key=natural_sort_key)
     mask_files_list = sorted(glob.glob(os.path.join(mask_path, '*.csv')), key=natural_sort_key)
-    
+
     if len(recon_files_list) == 0 or len(gt_files_list) == 0 or len(mask_files_list) == 0:
         print("No image files found in the specified paths.")
         return
-    
+
     print("len(gt_files_list):", len(gt_files_list))
     print("len(recon_files_list):", len(recon_files_list))
     print("len(mask_files_list):", len(mask_files_list))
@@ -196,7 +232,6 @@ def validate(loss_rate, data_path, save_path):
     temp_rmse = 0
     temp_mape = 0
     cloud_count = 0
-    outlier = 0
     plt_gt = []
     plt_res = []
 
@@ -216,8 +251,20 @@ def validate(loss_rate, data_path, save_path):
             gt_np = np.where(gt_np == 255, np.nan, gt_np / 255.0)
             mask = np.where(mask == 255, np.nan, mask)  # 마스크도 NaN 처리
 
-            W, H = gt_np.shape
+            # 추출한 row와 col 좌표를 파일 이름에서 파싱 (예: recon_file_name에 'rX_cY' 형태로 포함된 경우)
+            match = re.search(r'r(\d+)_c(\d+)', recon_file_name)
+            if match:
+                row, col = int(match.group(1)), int(match.group(2))
+            else:
+                print(f"Filename format does not match the expected row-col pattern for {recon_file_name}")
+                continue
 
+            # 저장된 컬러맵 이미지를 육지 마스크와 함께 저장
+            save_colormap_image_with_land_mask(restored_np, land_sea_mask_path, row, col,
+                                               os.path.join(color_image_path, recon_file_name))
+
+            # RMSE 및 MAPE 계산
+            W, H = gt_np.shape
             for w in range(W):
                 for h in range(H):
                     if np.isnan(mask[w, h]) or np.isnan(gt_np[w, h]) or np.isnan(restored_np[w, h]):
@@ -232,8 +279,6 @@ def validate(loss_rate, data_path, save_path):
                         temp_mape += abs(gt_np[w, h] - restored_np[w, h])
                         temp_rmse += (gt_np[w, h] - restored_np[w, h]) ** 2
                         cloud_count += 1
-
-            save_colormap_image(restored_np, os.path.join(color_image_path, recon_file_name))
 
     plt_gt = np.array(plt_gt)
     plt_res = np.array(plt_res)
