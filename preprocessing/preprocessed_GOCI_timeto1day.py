@@ -6,15 +6,18 @@ from tqdm import tqdm
 
 # 데이터 경로 설정
 img_path = '/media/juneyonglee/My Book1/GOCI/L2_Rrs/2021'
-save_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs'
-
+save_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs_new'
+# # 낙동강 좌표 설정 (픽셀 좌표, 중간좌표 기준)
+# region1_center_x, region1_center_y = (2336 + 2592) // 2, (3053 + 3309) // 2
+# # 새만금 좌표 설정 (픽셀 좌표, 중간좌표 기준)
+# region2_center_x, region2_center_y = (1851 + 2107) // 2, (2639 + 2895) // 2
 # 낙동강 좌표 설정 (픽셀 좌표)
-region1_x_min, region1_x_max = 2446, 2702
-region1_y_min, region1_y_max = 2953, 3209
+region1_x_min, region1_x_max = 2336, 2592
+region1_y_min, region1_y_max = 3053, 3309
 
 # 새만금 좌표 설정 (픽셀 좌표)
-region2_x_min, region2_x_max = 1861, 2117
-region2_y_min, region2_y_max = 2659, 2915
+region2_x_min, region2_x_max = 1851, 2107
+region2_y_min, region2_y_max = 2639, 2895
 
 # 저장 경로 없을 경우 생성
 if not os.path.isdir(save_path):

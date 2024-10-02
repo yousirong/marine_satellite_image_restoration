@@ -8,30 +8,6 @@ from datetime import datetime
 from tqdm import tqdm
 import tifffile as tiff
 
-# 수정된 check_pct 함수: NaN 비율로 loss 계산, 육지(999) 제외
-def check_pct(arr, mask):
-    ocean_pixels = (mask == 1)  # 해양 픽셀만 선택
-    valid_ocean_data = arr[ocean_pixels]  # 육지를 제외한 해양 픽셀
-
-    total_ocean_pixels = valid_ocean_data.size  # 전체 해양 픽셀 수
-    nan_count = np.isnan(valid_ocean_data).sum()  # NaN 값 수
-    
-    if total_ocean_pixels > 0:
-        loss_pct = (nan_count / total_ocean_pixels) * 100  # NaN 비율을 퍼센트로 계산
-    else:
-        loss_pct = 100
-    
-    return loss_pct
-
-# 해양 데이터 비율을 계산하는 함수
-def check_ocean_pct(patch, mask):
-    ocean_pixels = (mask == 1)  # 해양 픽셀 선택 (육지 제외)
-    valid_ocean_pixels = np.sum((patch > 0) & (patch <= 20) & ocean_pixels)  # 유효한 해양 데이터
-    total_ocean_pixels = np.sum(ocean_pixels)  # 전체 해양 픽셀 수 (육지 제외)
-
-    ocean_data_pct = (valid_ocean_pixels / total_ocean_pixels) * 100 if total_ocean_pixels > 0 else 0
-    return ocean_data_pct
-
 ########## path ##########
 data_base = '/media/juneyonglee/My Book/UST21/Daily'
 save_base = '/media/juneyonglee/My Book/Preprocessed/UST/Chl-a_8day'
@@ -56,6 +32,30 @@ for phase in ['train', 'test']:
         temp = os.path.join(save_base, phase, pct)
         if not os.path.isdir(temp):
             os.makedirs(temp)
+
+# 수정된 check_pct 함수: NaN 비율로 loss 계산, 육지(999) 제외
+def check_pct(img, mask):
+    ocean_pixels = (mask == 1)  # 해양 픽셀만 선택
+    valid_ocean_data = img[ocean_pixels]  # 육지를 제외한 해양 픽셀
+
+    total_ocean_pixels = valid_ocean_data.size  # 전체 해양 픽셀 수
+    nan_count = np.isnan(valid_ocean_data).sum()  # NaN 값 수
+    
+    if total_ocean_pixels > 0:
+        loss_pct = (nan_count / total_ocean_pixels) * 100  # NaN 비율을 퍼센트로 계산
+    else:
+        loss_pct = 100
+    
+    return loss_pct
+
+# 해양 데이터 비율을 계산하는 함수
+def check_ocean_pct(patch, mask):
+    ocean_pixels = (mask == 1)  # 해양 픽셀 선택 (육지 제외)
+    valid_ocean_pixels = np.sum((patch > 0) & (patch <= 20) & ocean_pixels)  # 유효한 해양 데이터
+    total_ocean_pixels = np.sum(ocean_pixels)  # 전체 해양 픽셀 수 (육지 제외)
+
+    ocean_data_pct = (valid_ocean_pixels / total_ocean_pixels) * 100 if total_ocean_pixels > 0 else 0
+    return ocean_data_pct
 
 # 8일 평균을 계산하는 함수
 def calculate_8day_avg(files, data_dir, land_sea_mask):

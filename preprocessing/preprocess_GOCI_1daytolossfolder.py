@@ -2,17 +2,18 @@ import os
 import shutil
 import numpy as np
 from tqdm import tqdm
-import cv2  # Ensure OpenCV is imported for reading TIFF files
+import cv2  # OpenCV for reading TIFF files
 
 # 전처리된 파일 경로 설정
 processed_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs'
 save_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs_patch_by_loss'
-
+data_path = '/media/juneyonglee/My Book1/GOCI/L2_Rrs/2021'
+save_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs_new'
 # 밴드 리스트
 band_lst = [2, 3, 4]
 
-# 손실률 계산 기준(10%, 20%, 30%, ..., 100%)
-loss_intervals = [10 * i for i in range(1, 11)]
+# 손실률 계산 기준(0%~10%, 10%~20%, ..., 90%~100%)
+loss_intervals = [i for i in range(0, 100, 10)]
 
 # 저장 경로 없을 경우 생성
 if not os.path.isdir(save_path):
@@ -56,20 +57,20 @@ for root, dirs, files in os.walk(processed_path):
                     zero_pixels = np.count_nonzero(img == 0)
                     loss_percentage = (zero_pixels / total_pixels) * 100
                     
-                    # 손실률이 0%인 경우 perfect 폴더로 이동
-                    if loss_percentage == 0:
+                    # 손실률이 0.001% 미만인 경우 perfect 폴더로 이동
+                    if loss_percentage < 0.001:
                         save_folder = os.path.join(save_path, f'band_{band}', 'perfect')
                     else:
-                        # 손실률에 따라 폴더 결정
+                        # 손실률에 따라 폴더 결정 (0~10%, 10~20%, ..., 90~100%)
                         loss_category = None
                         for loss in loss_intervals:
-                            if loss_percentage <= loss:
+                            if loss_percentage <= loss + 10:  # 범위가 0~10%, 10~20% 이렇게 설정됨
                                 loss_category = loss
                                 break
 
                         if loss_category is None:
-                            loss_category = 100  # 100% 이상은 100으로 설정
-                    
+                            loss_category = 90  # 90% 이상의 손실률은 90 폴더에 저장
+
                         # 손실률에 따른 폴더 경로 설정
                         save_folder = os.path.join(save_path, f'band_{band}', f'loss_{loss_category}')
                     
