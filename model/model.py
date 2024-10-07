@@ -236,13 +236,14 @@ class RFRNetModel():
 
                 # Get the filename and extract the r and c values
                 filename = filenames[k]  # Assuming filenames are passed as part of the test_loader
-                row, col = self.extract_row_col(filename)  # Extract row and column from the filename
+                # row, col = self.extract_row_col(filename)  # Extract row and column from the filename
+                filename_no_ext = os.path.splitext(os.path.basename(filename))[0]
 
                 # Define file prefixes for saving, using extracted row and col values
-                gt_file_prefix = f"{result_save_path_gt}/gt_{count}_r{row}_c{col}.png"
-                mask_file_prefix = f"{result_save_path_mask}/mask_{count}_r{row}_c{col}.png"
-                masked_file_prefix = f"{result_save_path_masked}/masked_{count}_r{row}_c{col}.png"
-                recon_file_prefix = f"{result_save_path_recon}/recon_{count}_r{row}_c{col}.png"
+                gt_file_prefix = f"{result_save_path_gt}/gt_{count}_{filename_no_ext}.png"
+                mask_file_prefix = f"{result_save_path_mask}/mask_{count}_{filename_no_ext}.png"
+                masked_file_prefix = f"{result_save_path_masked}/masked_{count}_{filename_no_ext}.png"
+                recon_file_prefix = f"{result_save_path_recon}/recon_{count}_{filename_no_ext}.png"
 
                 # Save images
                 self.save_batch_images_grid(gt_images[k:k+1], gt_file_prefix)        # Ground truth images
@@ -259,13 +260,13 @@ class RFRNetModel():
                 mask_degree = masks[k, 1, :, :].cpu().numpy()      # Get the second channel for the mask
 
                 # Save degree-related data (img, gt, mask) as CSV files, using row and col in the filenames
-                file_path = f'{result_degree_save_path_recon}/img_{count}_r{row}_c{col}.csv'
+                file_path = f'{result_degree_save_path_recon}/img_{count}_{filename_no_ext}.csv'
                 np.savetxt(file_path, fake_degree, delimiter=",")  # Save fake_B (reconstructed image)
 
-                file_path = f'{result_degree_save_path_gt}/gt_{count}_r{row}_c{col}.csv'
+                file_path = f'{result_degree_save_path_gt}/gt_{count}_{filename_no_ext}.csv'
                 np.savetxt(file_path, gt_degree, delimiter=",")  # Save ground truth
 
-                file_path = f'{result_degree_save_path_mask}/mask_{count}_r{row}_c{col}.csv'
+                file_path = f'{result_degree_save_path_mask}/mask_{count}_{filename_no_ext}.csv'
                 np.savetxt(file_path, mask_degree, delimiter=",")  # Save mask
 
             ei_time = time.time()

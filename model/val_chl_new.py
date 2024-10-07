@@ -152,12 +152,19 @@ def save_land_mask_image(land_mask_cropped, save_path):
     # plt.close()
 
 
-def save_colormap_image_with_land_mask(data, land_sea_mask_path, row, col, save_path, vmin=0, vmax=20, land_color=[0, 0, 0]):
+def save_colormap_image_with_land_mask(data, land_sea_mask_path, row, col, save_path, vmin=0, vmax=20, land_color=[0, 0, 0], recon_file_name=None):
     """
     Save the Chlorophyll-a image with normalization between 0 and 20.
     Land areas will be marked as black (or another specified color), and other areas will be color-mapped.
     Apply the land mask (256x256) to the image to mark land areas.
     """
+    # Extract the date from the filename (assuming it's in the format YYYYMMDD at the start)
+    date_str = None
+    if recon_file_name:
+        match = re.search(r'(\d{8})', recon_file_name)  # Extract the date part
+        if match:
+            date_str = match.group(1)
+
     # Load the land-sea mask
     land_mask_full = np.load(land_sea_mask_path)
 
@@ -184,8 +191,14 @@ def save_colormap_image_with_land_mask(data, land_sea_mask_path, row, col, save_
     colored_img[land_mask] = land_color  # Set the color for land (RGB)
 
     # Ensure the save path has the correct extension and remove .csv from the filename if present
-    save_path_with_extension = save_path if save_path.lower().endswith('.png') else save_path + '.png'
-    save_path_with_extension = save_path_with_extension.replace('.csv', '')  # Remove .csv from filename
+    if not save_path.lower().endswith('.png'):
+        save_path_with_extension = save_path.replace('.csv', '')  # Remove .csv from filename
+        if date_str:
+            save_path_with_extension += f'_{date_str}.png'
+        else:
+            save_path_with_extension += '.png'
+    else:
+        save_path_with_extension = save_path
 
     # Save the colored image
     plt.imsave(save_path_with_extension, colored_img)
@@ -206,6 +219,7 @@ def save_colormap_image_with_land_mask(data, land_sea_mask_path, row, col, save_
     # Save the image with the color bar
     plt.savefig(save_path_with_extension.replace('.png', '_bar.png'), dpi=300, bbox_inches='tight')
     plt.close()
+
 
 def validate(loss_rate, data_path, save_path, land_sea_mask_path):
     recon_path = os.path.join(data_path, 'recon')
