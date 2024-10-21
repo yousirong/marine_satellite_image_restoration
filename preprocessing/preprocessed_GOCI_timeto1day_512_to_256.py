@@ -121,6 +121,29 @@ def group_files_by_date_time(file_list):
 file_list = os.listdir(data_path)
 file_groups = group_files_by_date_time(file_list)
 
+# Separate function to process patches for a specific region
+def process_region_patches(patches, region_name, band, date, save_path, phase, region_center_x, region_center_y):
+    for patch_num, (patch, patch_mask, row, col) in enumerate(patches):
+        nan_pct = check_nan_pct(patch, patch_mask)  # NaN 비율 계산
+        if nan_pct == 100 or is_all_nans(patch, patch_mask):
+            continue  # Skip if all values are NaN
+        if nan_pct < 0.001:
+            dest_folder = os.path.join(save_path, f'band_{band}', phase, 'perfect')
+        else:
+            pct_folder = int(nan_pct // 10) * 10  # NaN 비율에 따라 폴더 선택
+            dest_folder = os.path.join(save_path, f'band_{band}', phase, str(pct_folder))
+        if not os.path.isdir(dest_folder):
+            os.makedirs(dest_folder)
+
+        # Compute the actual row and column for the patch within the GOCI grid
+        actual_row = region_center_x - 256 + row
+        actual_col = region_center_y - 256 + col
+
+        # Save the patch with the region name in the filename
+        patch_save_file = os.path.join(dest_folder, f"RRS_band_{band}_{region_name}_{date}_r{actual_row}_c{actual_col}.tiff")
+        tiff.imwrite(patch_save_file, patch.astype(np.uint16))
+
+        print(f"Saved {phase} patch at: {patch_save_file}")
 
 def process_file_group(file_group, band, date, region1_center_x, region1_center_y, region2_center_x, region2_center_y, ocean_mask, data_path, save_path):
     time_groups = defaultdict(list)
@@ -172,59 +195,21 @@ def process_file_group(file_group, band, date, region1_center_x, region1_center_
     region1_patches = extract_random_patches(daily_rrs_avg_region1, mask_region1, 256, 50)
     region2_patches = extract_random_patches(daily_rrs_avg_region2, mask_region2, 256, 50)
 
-    combined_patches = region1_patches + region2_patches
-    random.shuffle(combined_patches)
+    # Split Nakdong into train (40) and test (10)
+    random.shuffle(region1_patches)
+    train_patches_nak = region1_patches[:40]
+    test_patches_nak = region1_patches[40:]
 
-    split_index = int(0.8 * len(combined_patches))
-    train_patches = combined_patches[:split_index]
-    test_patches = combined_patches[split_index:]
+    # Split Saemangeum into train (40) and test (10)
+    random.shuffle(region2_patches)
+    train_patches_sae = region2_patches[:40]
+    test_patches_sae = region2_patches[40:]
 
-    # 패치 저장 로직에서 결측치 (NaN) 비율에 따라 폴더 선택
-    # Save train patches with date in the filename
-    for patch_num, (patch, patch_mask, row, col) in enumerate(train_patches):
-        nan_pct = check_nan_pct(patch, patch_mask)  # NaN 비율 계산
-        if nan_pct == 100 or is_all_nans(patch, patch_mask):
-            continue  # Skip if all values are NaN
-        if nan_pct < 0.001:
-            dest_folder = os.path.join(save_path, f'band_{band}', 'train', 'perfect')
-        else:
-            pct_folder = int(nan_pct // 10) * 10  # NaN 비율에 따라 폴더 선택
-            dest_folder = os.path.join(save_path, f'band_{band}', 'train', str(pct_folder))
-        if not os.path.isdir(dest_folder):
-            os.makedirs(dest_folder)
-
-        actual_row = region1_center_x - 256 + row
-        actual_col = region1_center_y - 256 + col
-
-        # Adding the date to the filename
-        patch_save_file = os.path.join(dest_folder, f"RRS_band_{band}_nak_{date}_r{actual_row}_c{actual_col}.tiff")
-        tiff.imwrite(patch_save_file, patch.astype(np.float32))
-
-        # Print the path where the patch is saved
-        print(f"Saved train patch at: {patch_save_file}")
-
-    # Save test patches with date in the filename
-    for patch_num, (patch, patch_mask, row, col) in enumerate(test_patches):
-        nan_pct = check_nan_pct(patch, patch_mask)  # NaN 비율 계산
-        if nan_pct == 100 or is_all_nans(patch, patch_mask):
-            continue  # Skip if all values are NaN
-        if nan_pct < 0.001:
-            dest_folder = os.path.join(save_path, f'band_{band}', 'test', 'perfect')
-        else:
-            pct_folder = int(nan_pct // 10) * 10  # NaN 비율에 따라 폴더 선택
-            dest_folder = os.path.join(save_path, f'band_{band}', 'test', str(pct_folder))
-        if not os.path.isdir(dest_folder):
-            os.makedirs(dest_folder)
-
-        actual_row = region2_center_x - 256 + row
-        actual_col = region2_center_y - 256 + col
-
-        # Adding the date to the filename
-        patch_save_file = os.path.join(dest_folder, f"RRS_band_{band}_sae_{date}_r{actual_row}_c{actual_col}.tiff")
-        tiff.imwrite(patch_save_file, patch.astype(np.float32))
-
-        # Print the path where the patch is saved
-        print(f"Saved test patch at: {patch_save_file}")
+    # Save train and test patches for both regions, with actual row/col based on GOCI data
+    process_region_patches(train_patches_nak, 'nak', band, date, save_path, 'train', region1_center_x, region1_center_y)
+    process_region_patches(test_patches_nak, 'nak', band, date, save_path, 'test', region1_center_x, region1_center_y)
+    process_region_patches(train_patches_sae, 'sae', band, date, save_path, 'train', region2_center_x, region2_center_y)
+    process_region_patches(test_patches_sae, 'sae', band, date, save_path, 'test', region2_center_x, region2_center_y)
 
 if __name__ == '__main__':
     with ProcessPoolExecutor(max_workers=os.cpu_count() - 2) as executor:

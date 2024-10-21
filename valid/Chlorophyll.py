@@ -4,10 +4,10 @@ import glob
 from tqdm import trange
 
 # 현재 사용 중인 경로 설정
-rrs_path_1 = 'model/results/band2_loss_20/600000/10'
-rrs_path_2 = 'model/results/band3_loss_20/600000/10'  # 2번째 밴드 경로
-rrs_path_3 = 'model/results/band4_loss_20/600000/10'  # 3번째 밴드 경로
-save_path = 'model/results/GOCI_chl/600000/10'
+rrs_path_1 = 'model/results/GOCI_RRS_band2_perfect/550000/10/'
+rrs_path_2 = 'model/results/GOCI_RRS_band3_perfect/550000/10'  # 2번째 밴드 경로
+rrs_path_3 = 'model/results/GOCI_RRS_band4_perfect/550000/10'  # 3번째 밴드 경로
+save_path = 'model/results/GOCI_chl/550000/10'
 
 # 결과 저장 폴더 생성
 if not os.path.isdir(save_path):

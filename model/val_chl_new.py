@@ -11,7 +11,11 @@ from matplotlib import cm
 from matplotlib.colors import Normalize
 import re
 
-land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy'
+# ust21
+# land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy'
+# goci 
+land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
+# preprocessing/is_land_on_GOCI_modified_1_999.npy
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
@@ -167,6 +171,8 @@ def save_colormap_image_with_land_mask(data, land_sea_mask_path, row, col, save_
 
     # Load the land-sea mask
     land_mask_full = np.load(land_sea_mask_path)
+    # GOCI test 
+    # land_mask_full = np.where(land_mask_full == 0, 1, 0)
 
     # Crop the land mask based on row and col (assuming 256x256 crops)
     land_mask_cropped = land_mask_full[row:row + 256, col:col + 256]

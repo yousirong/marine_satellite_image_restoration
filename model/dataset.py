@@ -1,11 +1,9 @@
 import os
 import cv2
 import numpy as np
-from PIL import Image
-import re
 import torch
 import random
-from scipy.io import loadmat
+import re
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, image_path, mask_path, land_sea_mask_path, mask_mode, target_size, augment=False, training=True, mask_reverse=False):
@@ -33,21 +31,17 @@ class Dataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.data)
 
-    # def __getitem__(self, index):
-    #     try:
-    #         item = self.load_item(index)
-    #     except Exception as e:
-    #         print(f"Loading error for: {self.data[index]}")
-    #         print(e)
-    #         item = self.load_item(0)
-    #     return item
     def __getitem__(self, index):
         try:
             img, mask = self.load_item(index)
         except Exception as e:
             print(f"Loading error for: {self.data[index]}")
-            print(e)
-            img, mask = self.load_item(0)
+            print(f"Error: {e}")
+            # 예외가 발생하면 첫 번째 항목을 로드하거나, 기본값을 사용
+            img, mask = self.load_item(0)  # 또는 기본 이미지 및 마스크로 대체
+            # 기본 이미지와 마스크로 대체할 경우 아래처럼 할 수도 있습니다:
+            # img = np.zeros((self.target_size, self.target_size, 3), dtype=np.float32)
+            # mask = np.zeros((self.target_size, self.target_size, 3), dtype=np.uint8)
         
         # Return the image, mask, and the corresponding filename
         filename = os.path.basename(self.data[index])  # Extract just the filename
@@ -56,9 +50,9 @@ class Dataset(torch.utils.data.Dataset):
     def load_item(self, index):
         # Load the image (GT)
         img = cv2.imread(self.data[index], cv2.IMREAD_UNCHANGED)
-        # test 할경우 주석 풀기 
-        # print(f"Image loaded: {self.data[index]}, dtype: {img.dtype}, shape: {img.shape}")
-
+        if img is None:
+            raise ValueError(f"Failed to load image at {self.data[index]}")
+        
         # Replace NaNs with 0
         img[np.isnan(img)] = 0
 
@@ -115,17 +109,25 @@ class Dataset(torch.utils.data.Dataset):
         mask_index = random.randint(0, len(self.mask_data) - 1)
         mask = cv2.imread(self.mask_data[mask_index], cv2.IMREAD_UNCHANGED)
 
+        # Check if the mask is loaded successfully
+        if mask is None:
+            print(f"Failed to load mask for index {mask_index}, using a blank mask instead.")
+            mask = np.zeros((imgh, imgw), dtype=np.uint8)
+
         # Resize the mask to match the image size
         mask = self.resize(mask, False)
 
         # Ensure the mask is binary
-        mask = (mask > 0).astype(np.uint8)  * 255
+        mask = (mask > 0).astype(np.uint8) * 255
         mask = np.stack([mask, mask, mask], axis=0)
 
         # Apply mask reversal if specified
         if self.mask_reverse:
             mask = 1 - mask
         return mask
+
+    # 나머지 메소드들은 동일하게 유지
+    # (to_tensor, get_land_sea_mask_patch, remove_land_from_mask 등)
     
     def get_land_sea_mask_patch(self, img, index, land_sea_mask):
         """
@@ -151,8 +153,11 @@ class Dataset(torch.utils.data.Dataset):
         Remove land areas from the mask and keep only ocean areas.
         육지 부분을 0으로 설정하고 해양 부분만 유지합니다.
         """
-        # Mask out the land: set land areas (land_sea_mask_patch == 999) to 0
-        # Keep only ocean areas (land_sea_mask_patch == 1)
+        # ust 21
+        # mask_modified = np.where((land_sea_mask_patch == 1) & (mask_image == 0), 255, mask_image)
+        # GOCI
+        # Land-sea mask patch should have ocean as 1 and land as 0
+        # Retain the mask only for ocean areas, setting land areas (land_sea_mask_patch == 0) to 0
         mask_modified = np.where((land_sea_mask_patch == 1) & (mask_image == 0), 255, mask_image)
         return mask_modified
 
@@ -174,8 +179,9 @@ class Dataset(torch.utils.data.Dataset):
         land_sea_mask = np.load(land_mask_path)
         # land_sea_mask = loadmat(land_mask_path)['Land']
         print(f"Loaded land-sea mask with shape: {land_sea_mask.shape}, dtype: {land_sea_mask.dtype}")
-        # Convert land = 0 to 999, and ocean = 1
-        # land_sea_mask = np.where(land_sea_mask == 0, 999, 1)
+        # for GOCI 육지(-1)와 해양(0) 구분 마스크에서 해양을 1로, 육지를 0으로 변환 - goci test 
+        # land_sea_mask = np.where(land_sea_mask == 0, 1, 0)
+
         return land_sea_mask
 
     # 기존 ust21 resize
