@@ -153,12 +153,10 @@ class Dataset(torch.utils.data.Dataset):
         Remove land areas from the mask and keep only ocean areas.
         육지 부분을 0으로 설정하고 해양 부분만 유지합니다.
         """
-        # ust 21
+        # UST21 할때 
         # mask_modified = np.where((land_sea_mask_patch == 1) & (mask_image == 0), 255, mask_image)
-        # GOCI
-        # Land-sea mask patch should have ocean as 1 and land as 0
-        # Retain the mask only for ocean areas, setting land areas (land_sea_mask_patch == 0) to 0
-        mask_modified = np.where((land_sea_mask_patch == 1) & (mask_image == 0), 255, mask_image)
+        # GOCI 할때 
+        mask_modified = np.where(land_sea_mask_patch == 999, 0, mask_image)
         return mask_modified
 
     def extract_row_col(self, filename):
@@ -180,7 +178,7 @@ class Dataset(torch.utils.data.Dataset):
         # land_sea_mask = loadmat(land_mask_path)['Land']
         print(f"Loaded land-sea mask with shape: {land_sea_mask.shape}, dtype: {land_sea_mask.dtype}")
         # for GOCI 육지(-1)와 해양(0) 구분 마스크에서 해양을 1로, 육지를 0으로 변환 - goci test 
-        # land_sea_mask = np.where(land_sea_mask == 0, 1, 0)
+        # land_sea_mask = np.where(land_sea_mask == 0, 999, land_sea_mask)
 
         return land_sea_mask
 

@@ -9,12 +9,14 @@ import random
 
 # 데이터 경로 설정
 data_path = '/media/juneyonglee/GOCI_vol1/GOCI/L2_Rrs'
-save_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs_new'
-land_sea_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy'
+save_path = '/media/juneyonglee/My Book/Preprocessed/GOCI/L2_RRS'
+land_sea_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
+
+# Load the GOCI land-sea mask
 land_sea_mask = np.load(land_sea_mask_path)
 
-# 육지(-1)와 해양(0) 구분 마스크에서 해양을 1로, 육지를 0으로 변환
-ocean_mask = np.where(land_sea_mask == 0, 1, 0)
+# 육지(999)와 해양(1) 구분 마스크 사용
+ocean_mask = land_sea_mask
 
 # 낙동강 좌표 설정 (픽셀 좌표, 중간좌표 기준)
 region1_center_x, region1_center_y = (2336 + 2592) // 2, (3053 + 3309) // 2
@@ -55,10 +57,10 @@ def check_nan_pct(img, mask):
     
     return loss_pct
 
-# 육지 비율 계산 함수 (해양 영역에서만 육지(0) 비율을 계산)
+# 육지 비율 계산 함수 (해양 영역에서만 육지(999) 비율을 계산)
 def check_land_pct(mask):
     total_pixels = mask.size  # 전체 픽셀 수
-    land_pixels = np.sum(mask == 0)  # 육지 픽셀 수 (mask == 0인 경우)
+    land_pixels = np.sum(mask == 999)  # 육지 픽셀 수 (mask == 999인 경우)
     
     if total_pixels > 0:
         land_pct = (land_pixels / total_pixels) * 100  # 육지 비율을 퍼센트로 계산
@@ -122,6 +124,7 @@ file_list = os.listdir(data_path)
 file_groups = group_files_by_date_time(file_list)
 
 # Separate function to process patches for a specific region
+# Separate function to process patches for a specific region
 def process_region_patches(patches, region_name, band, date, save_path, phase, region_center_x, region_center_y):
     for patch_num, (patch, patch_mask, row, col) in enumerate(patches):
         nan_pct = check_nan_pct(patch, patch_mask)  # NaN 비율 계산
@@ -139,9 +142,17 @@ def process_region_patches(patches, region_name, band, date, save_path, phase, r
         actual_row = region_center_x - 256 + row
         actual_col = region_center_y - 256 + col
 
-        # Save the patch with the region name in the filename
+        # Ensure patch is not entirely NaN
+        if np.all(np.isnan(patch)):
+            print(f"Skipping patch {patch_num} in {region_name} due to NaN")
+            continue
+
+        # NaN 값을 0으로 대체하거나 float로 저장할 수 있도록 변환
+        patch = np.nan_to_num(patch, nan=0.0)  # NaN을 0으로 대체
+
+        # Save the patch with the region name in the filename (float32로 저장)
         patch_save_file = os.path.join(dest_folder, f"RRS_band_{band}_{region_name}_{date}_r{actual_row}_c{actual_col}.tiff")
-        tiff.imwrite(patch_save_file, patch.astype(np.uint16))
+        tiff.imwrite(patch_save_file, patch.astype(np.float32))  # float32로 저장
 
         print(f"Saved {phase} patch at: {patch_save_file}")
 
@@ -187,23 +198,29 @@ def process_file_group(file_group, band, date, region1_center_x, region1_center_
     mask_region1 = ocean_mask[region1_center_x - 256:region1_center_x + 256, region1_center_y - 256:region1_center_y + 256]
     mask_region2 = ocean_mask[region2_center_x - 256:region2_center_x + 256, region2_center_y - 256:region2_center_y + 256]
 
-    # 해양은 NaN으로, 육지는 0으로 처리
-    daily_rrs_avg_region1 = np.where(mask_region1 == 1, daily_rrs_avg_region1, 0)
-    daily_rrs_avg_region2 = np.where(mask_region2 == 1, daily_rrs_avg_region2, 0)
+    # 육지는 NaN으로 처리
+    daily_rrs_avg_region1 = np.where(mask_region1 == 1, daily_rrs_avg_region1, np.nan)
+    daily_rrs_avg_region2 = np.where(mask_region2 == 1, daily_rrs_avg_region2, np.nan)
 
     # 패치 추출 시 육지 비율이 10% 이하인 패치만 선택
-    region1_patches = extract_random_patches(daily_rrs_avg_region1, mask_region1, 256, 50)
-    region2_patches = extract_random_patches(daily_rrs_avg_region2, mask_region2, 256, 50)
+    region1_patches = extract_random_patches(daily_rrs_avg_region1, mask_region1, 256, 100)
+    region2_patches = extract_random_patches(daily_rrs_avg_region2, mask_region2, 256, 100)
 
-    # Split Nakdong into train (40) and test (10)
+    # 추출된 패치가 100개 미만일 경우 처리
+    if len(region1_patches) < 100:
+        print(f"Warning: Only {len(region1_patches)} patches found for Nakdong region")
+    if len(region2_patches) < 100:
+        print(f"Warning: Only {len(region2_patches)} patches found for Saemangeum region")
+
+    # Nakdong region patches
     random.shuffle(region1_patches)
-    train_patches_nak = region1_patches[:40]
-    test_patches_nak = region1_patches[40:]
+    train_patches_nak = region1_patches[:int(len(region1_patches) * 0.8)]
+    test_patches_nak = region1_patches[int(len(region1_patches) * 0.8):]
 
-    # Split Saemangeum into train (40) and test (10)
+    # Saemangeum region patches
     random.shuffle(region2_patches)
-    train_patches_sae = region2_patches[:40]
-    test_patches_sae = region2_patches[40:]
+    train_patches_sae = region2_patches[:int(len(region2_patches) * 0.8)]
+    test_patches_sae = region2_patches[int(len(region2_patches) * 0.8):]
 
     # Save train and test patches for both regions, with actual row/col based on GOCI data
     process_region_patches(train_patches_nak, 'nak', band, date, save_path, 'train', region1_center_x, region1_center_y)
@@ -224,3 +241,4 @@ if __name__ == '__main__':
             print(future.result())
 
     print("Preprocessing completed.")
+

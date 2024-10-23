@@ -147,7 +147,7 @@ class RFRNetModel():
                     self.l1_loss_val = 0.0
 
                 # Save image grid every 10000 iterations
-                if self.iter % 100 == 0:
+                if self.iter % 10000 == 0:
                     save_directory = os.path.join(save_path, 'training')
                     os.makedirs(save_directory, exist_ok=True)
 
