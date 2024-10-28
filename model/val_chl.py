@@ -130,111 +130,57 @@ def save_land_mask_image(land_mask_cropped, save_path):
     # plt.savefig(save_path_with_extension.replace('.png', '_mask_bar.png'), dpi=300, bbox_inches='tight')
     # plt.close()
 
-import os
-import glob
-import numpy as np
-import re
-from tqdm import trange
-import warnings
-from matplotlib import cm
-from matplotlib.colors import Normalize
-import matplotlib.pyplot as plt
 
 
 def normalize_data_dynamic(data):
-    """
-    Normalize data dynamically between its min and max values.
-    If the max value exceeds 20, normalize between 0 and 20.
-    If the max value is below 20, normalize within the min and max values.
-    Land values (255) are excluded from normalization.
-    """
-    # Create a copy to avoid modifying the original data
     data_normalized = data.copy()
-
-    # Mask for land values (255)
     land_mask = (data_normalized == 255)
-
-    # Set land values to NaN so they won't affect normalization
     data_normalized[land_mask] = np.nan
-
-    # Compute the minimum and maximum values, excluding NaN values
     vmin = np.nanmin(data_normalized)
     vmax = np.nanmax(data_normalized)
-
-    # If vmax is greater than 20, cap it at 20 for normalization
     if vmax > 20:
         vmin, vmax = 0, 20
-    # Normalize the data to the range [vmin, vmax]
     data_normalized = (data_normalized - vmin) / (vmax - vmin)
-
-    # Replace NaN values with the original 255 (land)
     data_normalized[land_mask] = np.nan
-
-    return data_normalized, vmin, vmax  # Also return min/max for reference
-
+    return data_normalized, vmin, vmax
 
 def save_colormap_image_with_land_mask(data, land_sea_mask_path, row, col, save_path, land_color=[0, 0, 0], recon_file_name=None):
-    """
-    Save the Chlorophyll-a image with dynamic normalization.
-    Land areas will be marked as black (or another specified color), and other areas will be color-mapped.
-    Apply the land mask (256x256) to the image to mark land areas.
-    """
-    # Extract the date from the filename (assuming it's in the format YYYYMMDD at the start)
     date_str = None
     if recon_file_name:
         match = re.search(r'(\d{8})', recon_file_name)  # Extract the date part
         if match:
             date_str = match.group(1)
-
-    # Load the land-sea mask
+    
     land_mask_full = np.load(land_sea_mask_path)
-
-    # Crop the land mask based on row and col (assuming 256x256 crops)
     land_mask_cropped = land_mask_full[row:row + 256, col:col + 256]
-
-    # Normalize the data dynamically
     data_normalized, vmin, vmax = normalize_data_dynamic(data)
-
-    # Create a colormap for visualizing the data
     norm = Normalize(vmin=vmin, vmax=vmax)
-    colormap = cm.ScalarMappable(norm=norm, cmap='jet')  # Use consistent colormap ('jet')
+    colormap = cm.ScalarMappable(norm=norm, cmap='jet')
+    colored_img = colormap.to_rgba(data_normalized)[:, :, :3]
+    land_mask = (land_mask_cropped == 1)
+    colored_img[land_mask] = land_color
 
-    # Convert the normalized data into RGB format using the colormap
-    colored_img = colormap.to_rgba(data_normalized)[:, :, :3]  # Use only RGB values (omit alpha)
-
-    # Set land (based on the mask) to the specified land color (default is black)
-    land_mask = (land_mask_cropped == 1)  # Assuming 1 represents land, 0 represents sea
-    colored_img[land_mask] = land_color  # Set the color for land
-
-    # Ensure the save path has the correct extension and remove .csv from the filename if present
     if not save_path.lower().endswith('.png'):
         save_path_with_extension = save_path.replace('.csv', '')  # Remove .csv from filename
         if date_str:
-            save_path_with_extension += f'_{date_str}.png'
+            # Use date_str only once in the file name if present
+            save_path_with_extension += f'_nak_r{row}_c{col}.png'
         else:
             save_path_with_extension += '.png'
     else:
         save_path_with_extension = save_path
 
-    # Save the colored image
     plt.imsave(save_path_with_extension, colored_img)
-
-    # Use consistent colormap for display ('jet' in this case)
-    cmap = plt.get_cmap("jet")  # Use 'jet' to match the saved image
+    cmap = plt.get_cmap("jet")
     cmap.set_bad('white', 1.0)
-
-    # Display the image with a color bar (between vmin and vmax)
     plt.imshow(data_normalized, cmap=cmap, vmin=vmin, vmax=vmax)
     plt.colorbar(label='Chlorophyll-a concentration (mg/m³)', ticks=np.linspace(vmin, vmax, num=5))
     plt.title(f'Restored Chlorophyll-a Concentration with Land Mask')
-
-    # Remove axis ticks and labels
     plt.xticks([])
     plt.yticks([])
-
-    # Save the image with the color bar
     plt.savefig(save_path_with_extension.replace('.png', '_bar.png'), dpi=300, bbox_inches='tight')
     plt.close()
+
 
 
 def validate(loss_rate, data_path, save_path, land_sea_mask_path):

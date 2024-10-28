@@ -10,7 +10,7 @@ import tifffile as tiff
 
 ########## path ##########
 data_base = '/media/juneyonglee/My Book/UST21/Daily'
-save_base = '/media/juneyonglee/My Book/Preprocessed/UST/Chl-a_8day'
+save_base = '/media/juneyonglee/My Book/Preprocessed/UST21/chl-a_512'
 mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.mat'
 land_sea_mask = io.loadmat(mask_path)
 land_sea_mask = land_sea_mask['Land']  # MATLAB에서 Land 변수 가져오기

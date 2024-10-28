@@ -123,7 +123,7 @@ def group_files_by_date_time(file_list):
 file_list = os.listdir(data_path)
 file_groups = group_files_by_date_time(file_list)
 
-# Separate function to process patches for a specific region
+
 # Separate function to process patches for a specific region
 def process_region_patches(patches, region_name, band, date, save_path, phase, region_center_x, region_center_y):
     for patch_num, (patch, patch_mask, row, col) in enumerate(patches):
