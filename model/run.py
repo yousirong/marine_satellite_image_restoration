@@ -8,10 +8,10 @@ from torch.utils.tensorboard import SummaryWriter
 from utils.io import load_yaml, build_save_folder
 import torch 
 # GOCI 1day new validate function
-from val_chl import validate
+# from val_chl import validate
 
 # ust21 8day new validate function
-# from val_chl_new import validate
+from val_chl_new import validate
 
 
 def run():
@@ -45,7 +45,7 @@ def run():
     else:
         model.initialize_model(args.model_path, True, args.model_save_path, args.gpu_ids)
         model.cuda()
-        dataloader = DataLoader(Dataset(args.data_root, args.mask_root,args.land_sea_mask_path, args.mask_mode, args.target_size, mask_reverse=False), 
+        dataloader = DataLoader(Dataset(args.data_root, args.mask_root, args.land_sea_mask_path, args.mask_mode, args.target_size, mask_reverse=False), 
                                 batch_size=args.batch_size, 
                                 shuffle=True, 
                                 num_workers=args.n_threads)  # num_workers 설정

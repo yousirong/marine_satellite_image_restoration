@@ -13,9 +13,9 @@ from matplotlib.colors import Normalize
 import re
 
 # ust21
-# land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy'
+land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy'
 # goci 
-land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
+# land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
 # preprocessing/is_land_on_GOCI_modified_1_999.npy
 
 def natural_sort_key(s):

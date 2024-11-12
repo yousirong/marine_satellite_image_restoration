@@ -222,7 +222,7 @@ class RFRNetModel():
                 raise ValueError(f"Expected 2 or 3 items, but got {len(items)}")
 
             si_time = time.time()
-
+            
             # Ensure the land-sea mask is applied before feeding the network
             masks = (masks > 0).float()  # Ensure the mask is a float tensor (0 for land, 1 for ocean)
 
@@ -231,6 +231,21 @@ class RFRNetModel():
 
             # Forward pass: Use the masked image with the land-sea mask to exclude land during restoration
             masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
+            
+            # # Generate the mask based on missing (NaN) or zero values in the image
+            # masks = ((torch.isnan(gt_images)) | (gt_images == 0)).float()  # 1 for NaN or 0, 0 for valid data
+
+            # # Invert the mask so that valid areas are 1 and NaN/0 areas are 0
+            # masks = 1 - masks
+
+            # # Replace NaNs with 0 in the input image
+            # gt_images = torch.nan_to_num(gt_images, nan=0.0)
+
+            # # Apply the inverted mask to create masked images
+            # masked_images = gt_images * masks  # Masked image: keeps only valid parts
+
+            # # Forward pass: Use the masked image with the generated mask
+            # masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
 
             # Save images in grid format similar to training
             for k in range(fake_B.size(0)):

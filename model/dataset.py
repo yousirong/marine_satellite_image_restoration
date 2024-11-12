@@ -33,7 +33,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         try:
-            img, mask = self.load_item(index)
+            img, mask = self.load_item(index, test_mode=not self.training)
         except Exception as e:
             print(f"Loading error for: {self.data[index]}")
             print(f"Error: {e}")
@@ -47,7 +47,7 @@ class Dataset(torch.utils.data.Dataset):
         filename = os.path.basename(self.data[index])  # Extract just the filename
         return self.to_tensor(img), self.to_tensor(mask), filename
 
-    def load_item(self, index):
+    def load_item(self, index, test_mode=False):
         # Load the image (GT)
         img = cv2.imread(self.data[index], cv2.IMREAD_UNCHANGED)
         if img is None:
@@ -72,7 +72,11 @@ class Dataset(torch.utils.data.Dataset):
             img = np.concatenate([img, img, img], axis=2)
 
         # Step 2: Load mask image
-        mask = self.load_mask(img, index)
+        if test_mode:
+            mask = ((np.isnan(img)) | (img == 0)).astype(np.uint8)
+            mask = 1-mask
+        else:
+            mask = self.load_mask(img, index)
 
         # Step 3: Load the land-sea mask
         land_sea_mask = self.land_sea_mask
@@ -95,7 +99,7 @@ class Dataset(torch.utils.data.Dataset):
 
         # Convert the images and masks to tensors
         return self.to_tensor(img), self.to_tensor(land_removed_mask)
-
+    
     def load_mask(self, img, index):
         """
         Load the mask for a specific image.
@@ -241,6 +245,7 @@ class Dataset(torch.utils.data.Dataset):
 
         else:
             raise TypeError(f"Unsupported data type: {type(img)}")
+        
     def load_list(self, path):
         """
         Load the list of files from the directory or a single file path.

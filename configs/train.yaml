@@ -29,10 +29,11 @@ exp_name: GOCI RRS time data train
 notes: GOCI RRS
 
 # data_root: /home/juneyonglee/gocirrs_backup/home/pmilab/Documents/preprocessed_data/GOCI/Chl-a_processed/train/band_3
-data_root: /media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs_newtrain/band_2
+data_root: /media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs_newtrain/band_3/band_3
+
 mask_root: /media/juneyonglee/My Book/data/mask/Train
-model_save_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/GOCI_RRS_band2_newtrain
-model_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/GOCI_RRS_band2_newtrain
+model_save_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/GOCI_RRS_band3_newtrain
+model_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/GOCI_RRS_band3_newtrain
 land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy
 
 # Training parameters
