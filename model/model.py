@@ -102,7 +102,7 @@ class RFRNetModel():
         save_image(grid, save_path)
         print(f"Image grid saved at {save_path}")
 
-    
+
     def train(self, train_loader, save_path, store_capacity=10, finetune=False, iters=800000):
         count = 0
         self.G.train()
@@ -124,7 +124,7 @@ class RFRNetModel():
                     gt_images, masks, filenames = self.__cuda__(*items)
                 else:
                     raise ValueError(f"Expected 2 or 3 items, but got {len(items)}")
-                
+
                 # Ensure the land-sea mask is applied before feeding the network
                 masks = (masks > 0).float()  # Ensure the mask is a float tensor (0 for land, 1 for ocean)
 
@@ -158,15 +158,15 @@ class RFRNetModel():
                     self.save_batch_images_grid(masked_image, f"{file_prefix}_masked")
                     self.save_batch_images_grid(masks, f"{file_prefix}_masks")
 
-                # Save model checkpoint every 1000 iterations
-                if self.iter % 1000 == 0:
+                # Save model checkpoint every 10000 iterations
+                if self.iter % 10000 == 0:
                     if not os.path.exists(save_path):
                         os.makedirs(save_path)
                     if is_available_to_store(store_capacity):
                         save_ckpt(f'{save_path}/g_{self.iter}.pth', [('generator', self.G)], [('optimizer_G', self.optm_G)], self.iter)
                     else:
                         exit()
-                        
+
     def extract_row_col(self, filename):
         """
         Extract row (r) and column (c) values from the filename.
@@ -222,7 +222,7 @@ class RFRNetModel():
                 raise ValueError(f"Expected 2 or 3 items, but got {len(items)}")
 
             si_time = time.time()
-            
+
             # Ensure the land-sea mask is applied before feeding the network
             masks = (masks > 0).float()  # Ensure the mask is a float tensor (0 for land, 1 for ocean)
 
@@ -231,7 +231,7 @@ class RFRNetModel():
 
             # Forward pass: Use the masked image with the land-sea mask to exclude land during restoration
             masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
-            
+
             # # Generate the mask based on missing (NaN) or zero values in the image
             # masks = ((torch.isnan(gt_images)) | (gt_images == 0)).float()  # 1 for NaN or 0, 0 for valid data
 
@@ -264,7 +264,7 @@ class RFRNetModel():
                 # Save images as grids
                 self.save_batch_images_grid(gt_images[k:k+1], gt_file_prefix)         # Ground truth images
                 self.save_batch_images_grid(masked_image[k:k+1], masked_file_prefix)  # Masked input images
-                self.save_batch_images_grid(comp_B[k:k+1], recon_file_prefix)         # Reconstructed images 
+                self.save_batch_images_grid(comp_B[k:k+1], recon_file_prefix)         # Reconstructed images
                 self.save_batch_images_grid(masks[k:k+1], mask_file_prefix)           # Masks
 
                 # Save the mask just like in the train() function

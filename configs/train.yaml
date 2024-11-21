@@ -21,9 +21,9 @@
 # gpu_ids: [0, 1]
 # save_capacity: 5
 # num_workers: 16
-# warmup_batches: 1500  
+# warmup_batches: 1500
 
-# GOCI 
+# GOCI
 project_name: RRS
 exp_name: GOCI RRS time data train
 notes: GOCI RRS
@@ -33,7 +33,7 @@ data_root: /media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs_newtrain/band_3/b
 
 mask_root: /media/juneyonglee/My Book/data/mask/Train
 model_save_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/GOCI_RRS_band3_newtrain
-model_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/GOCI_RRS_band3_newtrain
+model_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/GOCI_RRS_band3_newtrain/g_100000.pth
 land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy
 
 # Training parameters
@@ -46,6 +46,5 @@ n_threads: 6
 gpu_ids: [0, 1]
 save_capacity: 5
 num_workers: 16
-warmup_batches: 1500  
-
-# python model/run.py --c configs/train.yaml 
+warmup_batches: 1500
+# python model/run.py --c configs/train.yaml
