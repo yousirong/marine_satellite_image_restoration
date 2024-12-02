@@ -7,13 +7,13 @@ from tqdm import tqdm
 import re
 
 # Paths
-rrs_gt_path_1 = 'model/results/GOCI_RRS_band2_test/550000/10/gt/'
-rrs_gt_path_2 = 'model/results/GOCI_RRS_band3_test/550000/10/gt/'  
-rrs_gt_path_3 = 'model/results/GOCI_RRS_band4_test/550000/10/gt/'  
+rrs_gt_path_1 = '/home/juneyonglee/MyData/backup_20240914/AY_UST/results/GOCI_RRS_band2_test/550000/10/gt/'
+rrs_gt_path_2 = '/home/juneyonglee/MyData/backup_20240914/AY_UST/results/GOCI_RRS_band3_newtrain_test/550000/10/gt/'
+rrs_gt_path_3 = '/home/juneyonglee/MyData/backup_20240914/AY_UST/results/GOCI_RRS_band4_test/550000/10/gt/'
 
-rrs_recon_path_1 = 'model/results/GOCI_RRS_band2_test/550000/10/recon/'
-rrs_recon_path_2 = 'model/results/GOCI_RRS_band3_test/550000/10/recon/'
-rrs_recon_path_3 = 'model/results/GOCI_RRS_band4_test/550000/10/recon/'
+rrs_recon_path_1 = '/home/juneyonglee/MyData/backup_20240914/AY_UST/results/GOCI_RRS_band2_test/550000/10/recon/'
+rrs_recon_path_2 = '/home/juneyonglee/MyData/backup_20240914/AY_UST/results/GOCI_RRS_band3_newtrain_test/550000/10/recon/'
+rrs_recon_path_3 = '/home/juneyonglee/MyData/backup_20240914/AY_UST/results/GOCI_RRS_band4_test/550000/10/recon/'
 
 rrs_mask = '/media/juneyonglee/My Book/data/mask/Test/10'
 save_path = 'model/results/GOCI_chl/550000/10'

@@ -14,31 +14,31 @@ import re
 
 # ust21
 land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy'
-# goci 
+# goci
 # land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
 # preprocessing/is_land_on_GOCI_modified_1_999.npy
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
 
-def plot_parity(filename, loss_rate, true, pred, rmse_, mape_, kind="scatter", 
-                xlabel="true (mg/m$^3$)", ylabel="predict (mg/m$^3$)", title="Loss 50-60%", 
+def plot_parity(filename, loss_rate, true, pred, rmse_, mape_, kind="scatter",
+                xlabel="true (mg/m$^3$)", ylabel="predict (mg/m$^3$)", title="Loss 50-60%",
                 hist2d_kws=None, scatter_kws=None, kde_kws=None,
                 equal=True, metrics=True, metrics_position="lower right",
                 figsize=(8, 8), ax=None, save_file=True):
-    
+
     if not ax:
         fig, ax = plt.subplots(figsize=figsize)
 
-    # data range, constrained between 0 and 20
+    # Data range, constrained between 0 and 20
     val_min = 0
     val_max = 20
 
-    # data plot
+    # Data plot
     if "scatter" in kind:
         if not scatter_kws:
-            scatter_kws = {'color': 'green', 'alpha': 0.5}
-        ax.scatter(true, pred, s=1, **scatter_kws)
+            scatter_kws = {'s': 1, 'alpha': 0.01}  # Set transparency using alpha
+        ax.scatter(true, pred, **scatter_kws)
     elif "hist2d" in kind:
         if not hist2d_kws:
             hist2d_kws = {'cmap': 'Greens', 'vmin': 1}
@@ -59,22 +59,22 @@ def plot_parity(filename, loss_rate, true, pred, rmse_, mape_, kind="scatter",
     ax.set_yticks(ticks)
     ax.set_yticklabels(ticks, fontsize=15)
 
-    # grid
+    # Grid
     ax.grid(True)
 
-    # 기준선
+    # Diagonal reference line
     ax.plot([val_min, val_max], [val_min, val_max], c="k", alpha=0.3)
 
-    # x, y label
+    # x, y labels
     font_label = {"color": "gray", "fontsize": 20}
     ax.set_xlabel(xlabel, fontdict=font_label, labelpad=8)
     ax.set_ylabel(ylabel, fontdict=font_label, labelpad=8)
 
-    # title
+    # Title
     font_title = {"color": "gray", "fontsize": 20, "fontweight": "bold"}
     ax.set_title(title, fontdict=font_title, pad=16)
 
-    # metrics
+    # Metrics
     if metrics:
         rmse = rmse_
         mape = mape_
@@ -100,13 +100,13 @@ def plot_parity(filename, loss_rate, true, pred, rmse_, mape_, kind="scatter",
         ax.text(text_pos_x, text_pos_y - 0.2, f"R2 = {r2:.3f}",
                 transform=ax.transAxes, fontdict=font_metrics, ha=ha)
 
-    # 파일로 저장
+    # Save to file
     fig = ax.figure
     fig.tight_layout()
     if save_file:
         fig.savefig(filename + f'/{loss_rate}.png')
     else:
-        print("check save file path, saving failed@@")
+        print("Check save file path, saving failed.")
     plt.show()
     return ax
 
@@ -137,7 +137,7 @@ def save_land_mask_image(land_mask_cropped, save_path):
     Save the cropped land-sea mask as an image, where land is black (255) and sea is white (0).
     """
     # Create a binary mask image (land as black, sea as white)
-    mask_img = land_mask_cropped 
+    mask_img = land_mask_cropped
 
     # # Ensure the save path has the correct extension and remove .csv from the filename if present
     # save_path_with_extension = save_path if save_path.lower().endswith('.png') else save_path + '_mask.png'
@@ -151,7 +151,7 @@ def save_land_mask_image(land_mask_cropped, save_path):
     # plt.title(f'Land-Sea Mask')
     # plt.xticks([])
     # plt.yticks([])
-    
+
     # # Save the mask image with a proper title
     # plt.savefig(save_path_with_extension.replace('.png', '_mask_bar.png'), dpi=300, bbox_inches='tight')
     # plt.close()
@@ -172,7 +172,7 @@ def save_colormap_image_with_land_mask(data, land_sea_mask_path, row, col, save_
 
     # Load the land-sea mask
     land_mask_full = np.load(land_sea_mask_path)
-    # GOCI test 
+    # GOCI test
     # land_mask_full = np.where(land_mask_full == 0, 1, 0)
 
     # Crop the land mask based on row and col (assuming 256x256 crops)
@@ -227,8 +227,7 @@ def save_colormap_image_with_land_mask(data, land_sea_mask_path, row, col, save_
     plt.savefig(save_path_with_extension.replace('.png', '_bar.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
-
-def validate(loss_rate, data_path, save_path, land_sea_mask_path):
+def validate(loss_rate, data_path, save_path, land_sea_mask_path, reliability_threshold=0.9):
     recon_path = os.path.join(data_path, 'recon')
     gt_path = os.path.join(data_path, 'gt')
     mask_path = os.path.join(data_path, 'mask')
@@ -292,14 +291,22 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path):
                         continue
                     elif gt_np[w, h] == 0:
                         continue  # 0으로 나누는 경우 방지
-                    else:
-                        loss = (gt_np[w, h] - restored_np[w, h]) / gt_np[w, h]
-                        plt_gt.append(gt_np[w, h])
-                        plt_res.append(restored_np[w, h])
 
-                        temp_mape += abs(gt_np[w, h] - restored_np[w, h])
-                        temp_rmse += (gt_np[w, h] - restored_np[w, h]) ** 2
-                        cloud_count += 1
+                    # Calculate reliability as the inverse relative error
+                    relative_error = abs(gt_np[w, h] - restored_np[w, h]) / gt_np[w, h]
+                    reliability = 1 - relative_error
+
+                    # Filter by reliability threshold
+                    if reliability < reliability_threshold:
+                        continue
+
+                    # Collect data points for plotting
+                    plt_gt.append(gt_np[w, h])
+                    plt_res.append(restored_np[w, h])
+
+                    temp_mape += abs(gt_np[w, h] - restored_np[w, h])
+                    temp_rmse += (gt_np[w, h] - restored_np[w, h]) ** 2
+                    cloud_count += 1
 
     plt_gt = np.array(plt_gt)
     plt_res = np.array(plt_res)
@@ -320,3 +327,97 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path):
                 mape_=temp_mape / cloud_count if cloud_count > 0 else float('nan'),
                 title=f"Loss {loss_rate}-{int(loss_rate)+9}%"
     )
+
+
+# def validate(loss_rate, data_path, save_path, land_sea_mask_path):
+#     recon_path = os.path.join(data_path, 'recon')
+#     gt_path = os.path.join(data_path, 'gt')
+#     mask_path = os.path.join(data_path, 'mask')
+#     assert os.path.isdir(recon_path) and os.path.isdir(gt_path) and os.path.isdir(mask_path), "Please check dataset path is valid"
+
+#     color_image_path = os.path.join(save_path, f'color_{loss_rate}')
+#     if not os.path.exists(color_image_path):
+#         os.makedirs(color_image_path)
+
+#     recon_files_list = sorted(glob.glob(os.path.join(recon_path, '*.csv')), key=natural_sort_key)
+#     gt_files_list = sorted(glob.glob(os.path.join(gt_path, '*.csv')), key=natural_sort_key)
+#     mask_files_list = sorted(glob.glob(os.path.join(mask_path, '*.csv')), key=natural_sort_key)
+
+#     if len(recon_files_list) == 0 or len(gt_files_list) == 0 or len(mask_files_list) == 0:
+#         print("No image files found in the specified paths.")
+#         return
+
+#     print("len(gt_files_list):", len(gt_files_list))
+#     print("len(recon_files_list):", len(recon_files_list))
+#     print("len(mask_files_list):", len(mask_files_list))
+
+#     temp_rmse = 0
+#     temp_mape = 0
+#     cloud_count = 0
+#     plt_gt = []
+#     plt_res = []
+
+#     with warnings.catch_warnings():
+#         warnings.filterwarnings('error')
+#         for i in trange(len(recon_files_list)):
+#             recon_file_name = os.path.basename(recon_files_list[i])
+#             mask_file_name = os.path.basename(mask_files_list[i])
+#             gt_file_name = os.path.basename(gt_files_list[i])
+
+#             restored_np = np.loadtxt(recon_files_list[i], delimiter=',', dtype='float32')
+#             mask = np.loadtxt(mask_files_list[i], delimiter=',', dtype='float32')
+#             gt_np = np.loadtxt(gt_files_list[i], delimiter=',', dtype='float32')
+
+#             # 육지(255)는 NaN으로, 그 외 값은 0~1로 정규화
+#             restored_np = np.where(restored_np == 255, np.nan, restored_np / 255.0)
+#             gt_np = np.where(gt_np == 255, np.nan, gt_np / 255.0)
+#             mask = np.where(mask == 255, np.nan, mask)  # 마스크도 NaN 처리
+
+#             # 추출한 row와 col 좌표를 파일 이름에서 파싱 (예: recon_file_name에 'rX_cY' 형태로 포함된 경우)
+#             match = re.search(r'r(\d+)_c(\d+)', recon_file_name)
+#             if match:
+#                 row, col = int(match.group(1)), int(match.group(2))
+#             else:
+#                 print(f"Filename format does not match the expected row-col pattern for {recon_file_name}")
+#                 continue
+
+#             # 저장된 컬러맵 이미지를 육지 마스크와 함께 저장
+#             save_colormap_image_with_land_mask(restored_np, land_sea_mask_path, row, col,
+#                                                os.path.join(color_image_path, recon_file_name))
+
+#             # RMSE 및 MAPE 계산
+#             W, H = gt_np.shape
+#             for w in range(W):
+#                 for h in range(H):
+#                     if np.isnan(mask[w, h]) or np.isnan(gt_np[w, h]) or np.isnan(restored_np[w, h]):
+#                         continue
+#                     elif gt_np[w, h] == 0:
+#                         continue  # 0으로 나누는 경우 방지
+#                     else:
+#                         loss = (gt_np[w, h] - restored_np[w, h]) / gt_np[w, h]
+#                         plt_gt.append(gt_np[w, h])
+#                         plt_res.append(restored_np[w, h])
+
+#                         temp_mape += abs(gt_np[w, h] - restored_np[w, h])
+#                         temp_rmse += (gt_np[w, h] - restored_np[w, h]) ** 2
+#                         cloud_count += 1
+
+#     plt_gt = np.array(plt_gt)
+#     plt_res = np.array(plt_res)
+
+#     if cloud_count == 0:
+#         print("No valid data found for plotting.")
+#         return
+
+#     # Normalize data between 0 and 20 for validation
+#     plt_gt_normalized = normalize_data(plt_gt, vmin=0, vmax=20)
+#     plt_res_normalized = normalize_data(plt_res, vmin=0, vmax=20)
+
+#     plot_parity(filename=save_path,
+#                 loss_rate=loss_rate,
+#                 true=plt_gt_normalized,
+#                 pred=plt_res_normalized,
+#                 rmse_=math.sqrt(temp_rmse / cloud_count) if cloud_count > 0 else float('nan'),
+#                 mape_=temp_mape / cloud_count if cloud_count > 0 else float('nan'),
+#                 title=f"Loss {loss_rate}-{int(loss_rate)+9}%"
+#     )

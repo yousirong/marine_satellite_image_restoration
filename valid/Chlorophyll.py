@@ -4,9 +4,9 @@ import glob
 from tqdm import trange
 
 # 현재 사용 중인 경로 설정
-rrs_path_1 = 'model/results/GOCI_RRS_band2_perfect/550000/10/'
-rrs_path_2 = 'model/results/GOCI_RRS_band3_perfect/550000/10'  # 2번째 밴드 경로
-rrs_path_3 = 'model/results/GOCI_RRS_band4_perfect/550000/10'  # 3번째 밴드 경로
+rrs_path_1 = '/home/juneyonglee/MyData/backup_20240914/AY_UST/results/GOCI_RRS_band2_test/550000/10/degree/gt/'
+rrs_path_2 = '/home/juneyonglee/MyData/backup_20240914/AY_UST/results/GOCI_RRS_band3_newtrain_test/550000/10/degree/gt/'
+rrs_path_3 = '/home/juneyonglee/MyData/backup_20240914/AY_UST/results/GOCI_RRS_band4_test/550000/10/degree/gt/'
 save_path = 'model/results/GOCI_chl/550000/10'
 
 # 결과 저장 폴더 생성
