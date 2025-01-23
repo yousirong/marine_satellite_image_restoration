@@ -65,8 +65,8 @@ except Exception as e:
 ########## Define Regions ##########
 # 좌표 정의 (필요에 따라 조정)
 # These variables are defined but not used in this script. They can be removed or used as needed.
-x_nak, y_nak = (3751, 4757)  # 낙동강 영역 시작점
-x_sae, y_sae = (3505, 3920)  # 새만금 영역 시작점
+x_nak, y_nak = (3751, 4757)
+x_sae, y_sae = (3505, 3920)
 
 ########## Create Necessary Directories ##########
 pcts = [str(i) for i in range(0, 101, 10)]  # '0', '10', ..., '100'
