@@ -119,8 +119,13 @@ class Dataset(torch.utils.data.Dataset):
                 # Optional data augmentation
                 if self.training and self.augment:
                     if np.random.binomial(1, 0.5) > 0:
-                        img = img[:, ::-1, ...]  # Flip image horizontally
-                        land_removed_mask = land_removed_mask[:, ::-1, ...]
+                        # (C, H, W)에서 width 축을 뒤집기
+                        img = img[:, :, ::-1]
+                        land_removed_mask = land_removed_mask[:, :, ::-1]
+
+                        # ascontiguousarray로 stride를 양수로 만듦
+                        img = np.ascontiguousarray(img)
+                        land_removed_mask = np.ascontiguousarray(land_removed_mask)
 
                 # Convert the images and masks to tensors
                 img_tensor = self.to_tensor(img)

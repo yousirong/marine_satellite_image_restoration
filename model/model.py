@@ -1,8 +1,6 @@
 import torch
 import torch.optim as optim
-from utils.io import load_ckpt
-from utils.io import save_ckpt
-from utils.io import is_available_to_store
+from utils.io import load_ckpt, save_ckpt, is_available_to_store
 from torchvision import transforms
 from torchvision.utils import make_grid, save_image
 from modules.RFRNet import RFRNet, VGG16FeatureExtractor
@@ -13,11 +11,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import torch.nn as nn
-import os
-import numpy as np
 import matplotlib.pyplot as plt
-import tifffile as tiff
-from PIL import Image
 import re
 
 class RFRNetModel():
@@ -35,20 +29,15 @@ class RFRNetModel():
         self.writer = None
         self.totensor = transforms.ToTensor()
 
-    # # Preprocess the mask to exclude land pixels (set land to 0, ocean to 1)
-    # def preprocess_mask(self, mask, land_value=999):
-    #     # Ensure the mask is on the same device and use torch.where to handle mask values
-    #     return torch.where(mask == land_value, torch.tensor(0, device=mask.device), torch.tensor(1, device=mask.device))
-
-    def initialize_model(self, path=None, train=True, model_save_path = None, gpu_ids=[0]):
+    def initialize_model(self, path=None, train=True, model_save_path=None, gpu_ids=[0]):
         self.G = RFRNet()
-        if torch.cuda.device_count()>1:
-            print(f"Using {len(gpu_ids)} gpus in parallel.")
-            self.G = nn.DataParallel(self.G)#, device_ids = gpu_ids)
+        if torch.cuda.device_count() > 1:
+            print(f"Using {len(gpu_ids)} GPUs in parallel.")
+            self.G = nn.DataParallel(self.G)  # , device_ids=gpu_ids)
 
-        self.optm_G = optim.Adam(self.G.parameters(), lr = 2e-5)
+        self.optm_G = optim.Adam(self.G.parameters(), lr=2e-5)
 
-        #tensorboard log dir
+        # TensorBoard log directory
         if train:
             self.writer = SummaryWriter(os.path.join("logs", os.path.basename(model_save_path)))
 
@@ -57,8 +46,8 @@ class RFRNetModel():
         try:
             start_iter = load_ckpt(path, [('generator', self.G)], [('optimizer_G', self.optm_G)])
             if train:
-                self.optm_G = optim.Adam(self.G.parameters(), lr = 2e-5)
-                print('Model Initialized, iter: ', start_iter)
+                self.optm_G = optim.Adam(self.G.parameters(), lr=2e-5)
+                print('Model Initialized, iter:', start_iter)
                 self.iter = start_iter
         except:
             print('No trained model, from start')
@@ -74,9 +63,11 @@ class RFRNetModel():
         else:
             self.device = torch.device("cpu")
 
-    def save_batch_images_grid(self, images, save_path, nrow=8, padding=2, normalize=True):
+    def save_batch_images_grid(self, images, save_path, nrow=8, padding=2, normalize=True, is_mask=False):
         """
-        Save a batch of images as a grid using torchvision.utils.make_grid.
+        Save a batch of images as a grid.
+        - If is_mask=True: Save as grayscale PNG.
+        - Else: Apply jet colormap to raw pixel values (0.01-10), normalize, and save as TIFF.
 
         Args:
             images (torch.Tensor): Batch of images (B, C, H, W).
@@ -84,7 +75,9 @@ class RFRNetModel():
             nrow (int): Number of images per row in the grid.
             padding (int): Amount of padding between images in the grid.
             normalize (bool): If True, normalize the tensor values to the 0-1 range for visualization.
+            is_mask (bool): If True, save as grayscale PNG. Else, apply jet colormap and save as TIFF.
         """
+        # print(f"Images shape: {images.shape}")  # Debugging: 출력
         if not isinstance(images, torch.Tensor):
             raise ValueError(f"Expected images to be a torch.Tensor object, but got: {type(images)}")
 
@@ -138,7 +131,7 @@ class RFRNetModel():
                 self.update_parameters()
                 self.iter += 1
 
-                if self.iter % 5000 == 0:
+                if self.iter % 100 == 0:
                     e_time = time.time()
                     int_time = e_time - s_time
                     print("Iteration:%d, l1_loss:%.4f, time_taken:%.2f" % (self.iter, self.l1_loss_val / 50, int_time))
@@ -146,7 +139,7 @@ class RFRNetModel():
                     s_time = time.time()
                     self.l1_loss_val = 0.0
 
-                # Save image grid every 10000 iterations
+                # Save image grid every 100 iterations
                 if self.iter % 10000 == 0:
                     save_directory = os.path.join(save_path, 'training')
                     os.makedirs(save_directory, exist_ok=True)
@@ -166,6 +159,13 @@ class RFRNetModel():
                         save_ckpt(f'{save_path}/g_{self.iter}.pth', [('generator', self.G)], [('optimizer_G', self.optm_G)], self.iter)
                     else:
                         exit()
+
+        # 이 부분은 while True 루프 내에 있으므로, 무한 루프이지만 안전하게 수정해야 합니다.
+        # 현재 위치에서는 while True 루프가 종료되지 않아 아래 코드는 실행되지 않을 것입니다.
+        # 따라서, 필요에 따라 루프를 종료하거나 조건을 추가해야 합니다.
+        e_time = time.time()
+        total_time = e_time - s_time
+        print(f"Total time taken: {total_time:.2f}s")
 
     def extract_row_col(self, filename):
         """
@@ -232,21 +232,6 @@ class RFRNetModel():
             # Forward pass: Use the masked image with the land-sea mask to exclude land during restoration
             masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
 
-            # # Generate the mask based on missing (NaN) or zero values in the image
-            # masks = ((torch.isnan(gt_images)) | (gt_images == 0)).float()  # 1 for NaN or 0, 0 for valid data
-
-            # # Invert the mask so that valid areas are 1 and NaN/0 areas are 0
-            # masks = 1 - masks
-
-            # # Replace NaNs with 0 in the input image
-            # gt_images = torch.nan_to_num(gt_images, nan=0.0)
-
-            # # Apply the inverted mask to create masked images
-            # masked_images = gt_images * masks  # Masked image: keeps only valid parts
-
-            # # Forward pass: Use the masked image with the generated mask
-            # masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
-
             # Save images in grid format similar to training
             for k in range(fake_B.size(0)):
                 count += 1
@@ -290,11 +275,11 @@ class RFRNetModel():
             i_time = ei_time - si_time
             print(f"Processed img#{count} in {i_time:.2f}s")
 
+        # 이 부분은 while True 루프 내에 위치하고 있어 실행되지 않을 것입니다.
+        # 필요에 따라 루프를 종료하거나 조건을 추가해야 합니다.
         e_time = time.time()
         total_time = e_time - s_time
         print(f"Total time taken: {total_time:.2f}s")
-
-
 
     def forward(self, masked_image, mask, gt_image):
         self.real_A = masked_image
@@ -320,20 +305,19 @@ class RFRNetModel():
 
     def Gray2VGGInput(self, x, dtype):
         #normalized [0-1]
-
         x = torch.flatten(x, 1)
         #x = x.unsqueeze(dim=1)
         x_min, _ = torch.min(x, dim=1, keepdim=True)
         x_max, _ = torch.max(x, dim=1, keepdim=True)
         #print(x_min.shape)
-        x = ((x-x_min) / (x_max-x_min)) * 255
+        x = ((x - x_min) / (x_max - x_min)) * 255
         #print(x.shape)
         x = x.reshape(6, 256, 256)
         #print(x.shape)
 
-        x_group =[]
+        x_group = []
         for i in range(6):
-            x_img = x[i:i+1,:,:]
+            x_img = x[i:i+1, :, :]
             x_img = torch.squeeze(x_img, 0)
             #print(x_img.shape)
 
@@ -367,16 +351,16 @@ class RFRNetModel():
         hole_loss = self.l1_loss(real_B, fake_B, (1 - self.mask))
 
         loss_G = (  tv_loss * 0.1
-                  + style_loss * 120
-                  + preceptual_loss * 0.05
-                  + valid_loss * 1
-                  + hole_loss * 6)
+                + style_loss * 120
+                + preceptual_loss * 0.05
+                + valid_loss * 1
+                + hole_loss * 6)
 
         self.l1_loss_val += valid_loss.detach() + hole_loss.detach()
         return loss_G
 
-    def l1_loss(self, f1, f2, mask = 1):
-        return torch.mean(torch.abs(f1 - f2)*mask)
+    def l1_loss(self, f1, f2, mask=1):
+        return torch.mean(torch.abs(f1 - f2) * mask)
 
     def style_loss(self, A_feats, B_feats):
         assert len(A_feats) == len(B_feats), "the length of two input feature maps lists should be the same"
@@ -389,14 +373,14 @@ class RFRNetModel():
             B_feat = B_feat.view(B_feat.size(0), B_feat.size(1), B_feat.size(2) * B_feat.size(3))
             A_style = torch.matmul(A_feat, A_feat.transpose(2, 1))
             B_style = torch.matmul(B_feat, B_feat.transpose(2, 1))
-            loss_value += torch.mean(torch.abs(A_style - B_style)/(c * w * h))
+            loss_value += torch.mean(torch.abs(A_style - B_style) / (c * w * h))
         return loss_value
 
     def TV_loss(self, x):
         h_x = x.size(2)
         w_x = x.size(3)
-        h_tv = torch.mean(torch.abs(x[:,:,1:,:]-x[:,:,:h_x-1,:]))
-        w_tv = torch.mean(torch.abs(x[:,:,:,1:]-x[:,:,:,:w_x-1]))
+        h_tv = torch.mean(torch.abs(x[:, :, 1:, :] - x[:, :, :h_x-1, :]))
+        w_tv = torch.mean(torch.abs(x[:, :, :, 1:] - x[:, :, :, :w_x-1]))
         return h_tv + w_tv
 
     def preceptual_loss(self, A_feats, B_feats):
@@ -416,4 +400,3 @@ class RFRNetModel():
             else:
                 result.append(item)  # If it's not a tensor (like a filename), just append it
         return result
-

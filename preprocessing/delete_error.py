@@ -44,5 +44,5 @@ def delete_black_masks(root_dir):
                     continue
 
 if __name__ == "__main__":
-    root_directory = "/media/juneyonglee/My Book/Preprocessed/GOCI_RRS/mask"
+    root_directory = "/media/juneyonglee/My Book/Preprocessed/UST21/mask"
     delete_black_masks(root_directory)

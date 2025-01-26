@@ -8,10 +8,10 @@ from torch.utils.tensorboard import SummaryWriter
 from utils.io import load_yaml, build_save_folder
 import torch
 # GOCI 1day new validate function
-from val_chl import validate
+# from val_chl import validate
 
 # ust21 8day new validate function
-# from val_chl_new import validate
+from val_chl_new import validate
 
 
 def run():
