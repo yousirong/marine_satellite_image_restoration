@@ -12,7 +12,7 @@ import logging
 import argparse
 
 # ======================== Path Definitions =========================
-data_base = '/media/juneyonglee/My Book1/GOCI/L2_Rrs/2021'  # GOCI RRS 데이터(.he5)가 있는 루트 경로
+data_base = '/media/juneyonglee/GOCI_vol2/GOCI/L2_Rrs'  # GOCI RRS 데이터(.he5)가 있는 루트 경로
 save_base = '/media/juneyonglee/My Book/Preprocessed/GOCI_RRS/mask'
 mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy'  # GOCI용 육지-해양 마스크 (.npy)
 

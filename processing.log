@@ -1,1 +1,0 @@
-2025-01-19 16:13:39,406 - ERROR - Failed to load land-sea mask: [Errno 2] No such file or directory: '/path/to/Land_mask.mat'
