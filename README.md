@@ -1,5 +1,5 @@
-# AY_ust
-프로젝트명: AY_ust 해양위성영상 분석 및 활용 연구
+# marine_satellite_image_restoration
+프로젝트명: marine_satellite_image_restoration 해양위성영상 분석 및 활용 연구
 
 주요 연구과제:
 
