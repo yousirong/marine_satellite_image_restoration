@@ -76,12 +76,13 @@ class Dataset(torch.utils.data.Dataset):
 
             # Step 2: Load mask image
             if test_mode:
-                # For testing, generate mask based on image data
-                # Assuming that NaN or 0 in image indicates missing data
-                mask = ((img == 0).any(axis=0)).astype(np.uint8)  # Shape: (H, W)
-                mask = 1 - mask  # Invert mask: 1 for known, 0 for missing
-                mask = np.expand_dims(mask, axis=0)  # Shape: (1, H, W)
-                mask = np.repeat(mask, 3, axis=0)  # Shape: (3, H, W)
+                # # For testing, generate mask based on image data
+                # # Assuming that NaN or 0 in image indicates missing data
+                # mask = ((img == 0).any(axis=0)).astype(np.uint8)  # Shape: (H, W)
+                # mask = 1 - mask  # Invert mask: 1 for known, 0 for missing
+                # mask = np.expand_dims(mask, axis=0)  # Shape: (1, H, W)
+                # mask = np.repeat(mask, 3, axis=0)  # Shape: (3, H, W)
+                mask = self.load_mask(img, index)
             else:
                 # For training, load mask from mask files
                 mask = self.load_mask(img, index)

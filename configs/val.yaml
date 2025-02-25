@@ -2,8 +2,10 @@ project_name: RFR
 exp_name: CHL_only_range2
 notes: 0~20 in range, else outlier
 
-data_path: model/results/GOCI_chl/550000/10
-# model/results/GOCI_chl/550000/10
+data_path: /media/juneyonglee/My Book/results/30
+# data_path: /home/juneyonglee/Documents/results/10
+
+# data_path: model/results/GOCI_chl/550000/10
 
 # data_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/results/ust21_chl_8day_perfect/600000/50
 # data_path: model/results/ust21_chl_8day_10/600000/20
@@ -11,12 +13,10 @@ data_path: model/results/GOCI_chl/550000/10
 # data_path: model/results/ust21_chl_8day_30/600000/40
 # data_path: model/results/ust21_chl_8day_40/600000/50
 
-#  60 example
-#  model/results/ust_chl_4_perfect/600000/60
 # land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
-land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy
+land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
 
 # save_path: model/performance/ust21_chl_color
-save_path: model/performance/GOCI
+save_path: /media/juneyonglee/My Book/performence/UST21
 gpu_ids: [0, 1]
 # python model/run.py --c configs/val.yaml --val

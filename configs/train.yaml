@@ -14,7 +14,7 @@ land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Lan
 # Training parameters
 max_epochs: ~
 mask_mode: 0
-batch_size: 32
+batch_size: 36
 target_size: 256
 num_iters: 1000000
 n_threads: 6

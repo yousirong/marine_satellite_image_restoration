@@ -181,15 +181,18 @@ class RFRNetModel():
             raise ValueError(f"Could not extract row and col from filename: {filename}")
 
     def test(self, test_loader, result_save_path):
-        self.G.eval()  # Set the model to evaluation mode
-
+        self.G.eval()  # 모델 평가 모드로 전환
         for para in self.G.parameters():
-            para.requires_grad = False  # Disable gradient computation during testing
+            para.requires_grad = False  # 테스트 시 gradient 계산 비활성화
+
+        # 전달받은 result_save_path를 절대 경로로 변환하여 사용
+        result_save_path = os.path.abspath(result_save_path)
+        print("Saving test results to:", result_save_path)
 
         count = 0
         s_time = time.time()
 
-        # Create directories for saving results
+        # 결과 저장 디렉터리 생성 (원하는 경로 내의 하위 폴더들)
         result_save_path_recon = os.path.join(result_save_path, 'recon')
         result_save_path_gt = os.path.join(result_save_path, 'gt')
         result_save_path_mask = os.path.join(result_save_path, 'mask')
@@ -200,86 +203,70 @@ class RFRNetModel():
         result_degree_save_path_mask = os.path.join(result_degree_save_path, 'mask')
         result_degree_save_path_recon = os.path.join(result_degree_save_path, 'recon')
 
-        # Ensure the directories exist
-        os.makedirs(result_save_path_recon, exist_ok=True)
-        os.makedirs(result_save_path_gt, exist_ok=True)
-        os.makedirs(result_save_path_mask, exist_ok=True)
-        os.makedirs(result_save_path_masked, exist_ok=True)
+        for d in [result_save_path_recon, result_save_path_gt, result_save_path_mask,
+                result_save_path_masked, result_degree_save_path, result_degree_save_path_gt,
+                result_degree_save_path_mask, result_degree_save_path_recon]:
+            os.makedirs(d, exist_ok=True)
 
-        os.makedirs(result_degree_save_path, exist_ok=True)
-        os.makedirs(result_degree_save_path_gt, exist_ok=True)
-        os.makedirs(result_degree_save_path_mask, exist_ok=True)
-        os.makedirs(result_degree_save_path_recon, exist_ok=True)
-
-        # Iterate over the test_loader once
+        # 테스트 데이터셋의 배치를 순회
         for items in test_loader:
-            # Unpack the batch properly based on the number of items
+            # items에 filename 정보가 없는 경우, 임의로 생성
             if len(items) == 2:
                 gt_images, masks = self.__cuda__(*items)
-            elif len(items) == 3:  # If there is an additional item, like filenames
+                batch_size = gt_images.size(0)
+                filenames = [f"test_{i}" for i in range(batch_size)]
+            elif len(items) == 3:
                 gt_images, masks, filenames = self.__cuda__(*items)
             else:
                 raise ValueError(f"Expected 2 or 3 items, but got {len(items)}")
 
             si_time = time.time()
 
-            # Ensure the land-sea mask is applied before feeding the network
-            masks = (masks > 0).float()  # Ensure the mask is a float tensor (0 for land, 1 for ocean)
-
-            # Multiply the gt_images with land-sea mask to ensure only ocean parts are passed through
+            # 마스크를 0/1 float 텐서로 변환 (0: 육지, 1: 해양)
+            masks = (masks > 0).float()
+            # gt_images와 마스크를 곱하여 해양 영역만 추출
             masked_images = gt_images * masks
 
-            # Forward pass: Use the masked image with the land-sea mask to exclude land during restoration
+            # forward pass (train과 동일한 방식으로 처리)
             masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
 
-            # Save images in grid format similar to training
-            for k in range(fake_B.size(0)):
+            # 배치 내 각 샘플별 결과 저장
+            batch_size = fake_B.size(0)
+            for k in range(batch_size):
                 count += 1
-
-                # Get the filename and extract the row and column values
-                filename = filenames[k]  # Assuming filenames are passed as part of the test_loader
+                # filename이 이미 있다면 사용, 없으면 임의의 이름을 사용
+                filename = filenames[k]
                 filename_no_ext = os.path.splitext(os.path.basename(filename))[0]
 
-                # Define file prefixes for saving
-                gt_file_prefix = f"{result_save_path_gt}/gt_{count}_{filename_no_ext}.png"
-                mask_file_prefix = f"{result_save_path_mask}/mask_{count}_{filename_no_ext}.png"
-                masked_file_prefix = f"{result_save_path_masked}/masked_{count}_{filename_no_ext}.png"
-                recon_file_prefix = f"{result_save_path_recon}/recon_{count}_{filename_no_ext}.png"
+                # 저장할 파일 경로 정의 (PNG 형식으로 저장)
+                gt_file_prefix = os.path.join(result_save_path_gt, f"gt_{count}_{filename_no_ext}.png")
+                mask_file_prefix = os.path.join(result_save_path_mask, f"mask_{count}_{filename_no_ext}.png")
+                masked_file_prefix = os.path.join(result_save_path_masked, f"masked_{count}_{filename_no_ext}.png")
+                recon_file_prefix = os.path.join(result_save_path_recon, f"recon_{count}_{filename_no_ext}.png")
 
-                # Save images as grids
-                self.save_batch_images_grid(gt_images[k:k+1], gt_file_prefix)         # Ground truth images
-                self.save_batch_images_grid(masked_image[k:k+1], masked_file_prefix)  # Masked input images
-                self.save_batch_images_grid(comp_B[k:k+1], recon_file_prefix)         # Reconstructed images
-                self.save_batch_images_grid(masks[k:k+1], mask_file_prefix)           # Masks
+                # 결과 이미지를 그리드 형식으로 저장
+                self.save_batch_images_grid(gt_images[k:k+1], gt_file_prefix)
+                self.save_batch_images_grid(masked_image[k:k+1], masked_file_prefix)
+                self.save_batch_images_grid(comp_B[k:k+1], recon_file_prefix)
+                self.save_batch_images_grid(masks[k:k+1], mask_file_prefix)
 
-                # Save the mask just like in the train() function
-                mask_grid = masks[k:k+1]  # Extract the mask for the current image batch
-                self.save_batch_images_grid(mask_grid, mask_file_prefix, nrow=1, padding=2, normalize=True)  # Save mask as a grid
+                # 채널별 평균(예: degree 계산) 데이터를 CSV로 저장 (필요한 경우)
+                fake_degree = fake_B[k].mean(dim=0).cpu().numpy()  # 채널 평균
+                gt_degree = gt_images[k, 1, :, :].cpu().numpy()      # 두 번째 채널 (예시)
+                mask_degree = masks[k, 1, :, :].cpu().numpy()        # 두 번째 채널
 
-                # Calculate degree values by averaging across channels and save as CSV files
-                fake_degree = fake_B[k].mean(dim=0).cpu().numpy()  # Calculate mean across channels for degree
-                gt_degree = gt_images[k, 1, :, :].cpu().numpy()    # Get the second channel (assuming it's needed for degree)
-                mask_degree = masks[k, 1, :, :].cpu().numpy()      # Get the second channel for the mask
-
-                # Save degree-related data (img, gt, mask) as CSV files
-                file_path = f'{result_degree_save_path_recon}/img_{count}_{filename_no_ext}.csv'
-                np.savetxt(file_path, fake_degree, delimiter=",")
-
-                file_path = f'{result_degree_save_path_gt}/gt_{count}_{filename_no_ext}.csv'
-                np.savetxt(file_path, gt_degree, delimiter=",")
-
-                file_path = f'{result_degree_save_path_mask}/mask_{count}_{filename_no_ext}.csv'
-                np.savetxt(file_path, mask_degree, delimiter=",")
+                np.savetxt(os.path.join(result_degree_save_path_recon, f"img_{count}_{filename_no_ext}.csv"),
+                        fake_degree, delimiter=",")
+                np.savetxt(os.path.join(result_degree_save_path_gt, f"gt_{count}_{filename_no_ext}.csv"),
+                        gt_degree, delimiter=",")
+                np.savetxt(os.path.join(result_degree_save_path_mask, f"mask_{count}_{filename_no_ext}.csv"),
+                        mask_degree, delimiter=",")
 
             ei_time = time.time()
-            i_time = ei_time - si_time
-            print(f"Processed img#{count} in {i_time:.2f}s")
+            print(f"Processed a batch of {batch_size} images in {ei_time - si_time:.2f}s")
 
-        # 이 부분은 while True 루프 내에 위치하고 있어 실행되지 않을 것입니다.
-        # 필요에 따라 루프를 종료하거나 조건을 추가해야 합니다.
-        e_time = time.time()
-        total_time = e_time - s_time
-        print(f"Total time taken: {total_time:.2f}s")
+        total_time = time.time() - s_time
+        print(f"Total test time: {total_time:.2f}s")
 
     def forward(self, masked_image, mask, gt_image):
         self.real_A = masked_image
