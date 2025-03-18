@@ -71,7 +71,7 @@ def run():
     # -------------------- VALIDATION --------------------
     elif args.val:
         # val 함수에서 결과 저장 경로가 필요하다면 비슷한 방식으로 처리
-        validate(args.loss_rate, args.data_path, args.performance_save_path, args.land_sea_mask_path)
+        validate(args.loss_rate, args.data_path, args.performance_save_path, args.land_sea_mask_path, args.sample_size)
 
     # -------------------- TRAIN --------------------
     else:

@@ -162,11 +162,19 @@ def check_pct(img, mask):
     loss_pct = (missing_count / ocean_vals.size) * 100
     return loss_pct
 
-def save_patch_image_as_float(patch, file_path):
+
+def save_patch_image(patch, file_path):
     """
-    패치의 RRS 값을 float 형식으로 그대로 TIFF에 저장.
+    Saves a chlorophyll-a patch as a TIFF file using the original float data.
+
+    Parameters:
+    - patch (numpy.ndarray): 2D array of chlorophyll-a data for the patch.
+    - file_path (str): Destination file path for the TIFF image.
     """
-    tiff.imwrite(file_path, patch.astype(np.float32))
+    # Create a copy to avoid modifying the original patch
+    patch_visual = patch.copy()
+    # Save as TIFF without casting to integer (원본 데이터 타입 그대로 저장)
+    tiff.imwrite(file_path, patch_visual)
 
 def compute_ocean_ratio(mask_patch):
     """
@@ -292,7 +300,7 @@ def process_day(date_key):
 
                 try:
                     # float 형식으로 저장
-                    save_patch_image_as_float(patch, final_save_path)
+                    save_patch_image(patch, final_save_path)
                     logging.info(f"(Band {band}) Saved patch: {final_save_path}")
                     selected_patches.add((py_start, px_start))
                 except Exception as e:

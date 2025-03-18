@@ -2,7 +2,7 @@ project_name: RFR
 exp_name: CHL_only_range2
 notes: 0~20 in range, else outlier
 
-data_path: /media/juneyonglee/My Book/results/30
+data_path: /media/juneyonglee/My Book/results/50
 # data_path: /home/juneyonglee/Documents/results/10
 
 # data_path: model/results/GOCI_chl/550000/10
@@ -18,5 +18,6 @@ land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Lan
 
 # save_path: model/performance/ust21_chl_color
 save_path: /media/juneyonglee/My Book/performence/UST21
+sample_size: 5000
 gpu_ids: [0, 1]
 # python model/run.py --c configs/val.yaml --val

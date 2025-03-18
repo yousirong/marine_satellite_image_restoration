@@ -181,7 +181,7 @@ def calculate_8day_avg(files, data_dir, land_sea_mask):
 
 def save_patch_image(patch, file_path):
     """
-    Saves a chlorophyll-a patch as a TIFF file.
+    Saves a chlorophyll-a patch as a TIFF file using the original float data.
 
     Parameters:
     - patch (numpy.ndarray): 2D array of chlorophyll-a data for the patch.
@@ -189,12 +189,9 @@ def save_patch_image(patch, file_path):
     """
     # Create a copy to avoid modifying the original patch
     patch_visual = patch.copy()
-
-    # Cast to uint16 for TIFF format
-    patch_visual = patch_visual.astype(np.uint16)
-
-    # Save as TIFF
+    # Save as TIFF without casting to integer (원본 데이터 타입 그대로 저장)
     tiff.imwrite(file_path, patch_visual)
+
 
 def extract_date_from_filename(filename):
     """

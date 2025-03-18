@@ -253,14 +253,22 @@ class RFRNetModel():
                 # 채널별 평균(예: degree 계산) 데이터를 CSV로 저장 (필요한 경우)
                 fake_degree = fake_B[k].mean(dim=0).cpu().numpy()  # 채널 평균
                 gt_degree = gt_images[k, 1, :, :].cpu().numpy()      # 두 번째 채널 (예시)
-                mask_degree = masks[k, 1, :, :].cpu().numpy()        # 두 번째 채널
+
+                # 기존 mask_degree (원래는 0: 결측, 1: 유효) 추출
+                mask_degree = masks[k, 1, :, :].cpu().numpy()
+                # gt_images의 두 번째 채널을 기준으로 육지와 해양을 구분 (해양: 값 > 0)
+                gt_channel = gt_images[k, 1, :, :].cpu().numpy()
+                ocean_region = (gt_channel > 0)
+                # 육지 영역(해양이 아닌 부분)은 결측치 계산에서 제외하기 위해 유효한 값(예: 1)으로 설정
+                mask_degree[~ocean_region] = 1
 
                 np.savetxt(os.path.join(result_degree_save_path_recon, f"img_{count}_{filename_no_ext}.csv"),
-                        fake_degree, delimiter=",")
+                           fake_degree, delimiter=",")
                 np.savetxt(os.path.join(result_degree_save_path_gt, f"gt_{count}_{filename_no_ext}.csv"),
-                        gt_degree, delimiter=",")
+                           gt_degree, delimiter=",")
                 np.savetxt(os.path.join(result_degree_save_path_mask, f"mask_{count}_{filename_no_ext}.csv"),
-                        mask_degree, delimiter=",")
+                           mask_degree, delimiter=",")
+
 
             ei_time = time.time()
             print(f"Processed a batch of {batch_size} images in {ei_time - si_time:.2f}s")
