@@ -13,6 +13,7 @@ from PIL import Image
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import re
+from tqdm import tqdm
 
 class RFRNetModel():
     def __init__(self):
@@ -180,6 +181,7 @@ class RFRNetModel():
         else:
             raise ValueError(f"Could not extract row and col from filename: {filename}")
 
+
     def test(self, test_loader, result_save_path):
         self.G.eval()  # 모델 평가 모드로 전환
         for para in self.G.parameters():
@@ -191,6 +193,11 @@ class RFRNetModel():
 
         count = 0
         s_time = time.time()
+
+        # 전체 테스트 이미지 개수를 계산 (test_loader.dataset이 존재하는 경우)
+        total_test_images = len(test_loader.dataset) if hasattr(test_loader, 'dataset') else 0
+        if total_test_images == 0:
+            print("전체 테스트 이미지 개수를 확인할 수 없습니다.")
 
         # 결과 저장 디렉터리 생성 (원하는 경로 내의 하위 폴더들)
         result_save_path_recon = os.path.join(result_save_path, 'recon')
@@ -208,6 +215,9 @@ class RFRNetModel():
                 result_degree_save_path_mask, result_degree_save_path_recon]:
             os.makedirs(d, exist_ok=True)
 
+        # tqdm 진행바 생성: 전체 테스트 이미지 개수를 총합으로 설정
+        pbar = tqdm(total=total_test_images, desc="Processing test images")
+
         # 테스트 데이터셋의 배치를 순회
         for items in test_loader:
             # items에 filename 정보가 없는 경우, 임의로 생성
@@ -217,6 +227,7 @@ class RFRNetModel():
                 filenames = [f"test_{i}" for i in range(batch_size)]
             elif len(items) == 3:
                 gt_images, masks, filenames = self.__cuda__(*items)
+                batch_size = gt_images.size(0)
             else:
                 raise ValueError(f"Expected 2 or 3 items, but got {len(items)}")
 
@@ -231,7 +242,6 @@ class RFRNetModel():
             masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
 
             # 배치 내 각 샘플별 결과 저장
-            batch_size = fake_B.size(0)
             for k in range(batch_size):
                 count += 1
                 # filename이 이미 있다면 사용, 없으면 임의의 이름을 사용
@@ -263,18 +273,23 @@ class RFRNetModel():
                 mask_degree[~ocean_region] = 1
 
                 np.savetxt(os.path.join(result_degree_save_path_recon, f"img_{count}_{filename_no_ext}.csv"),
-                           fake_degree, delimiter=",")
+                        fake_degree, delimiter=",")
                 np.savetxt(os.path.join(result_degree_save_path_gt, f"gt_{count}_{filename_no_ext}.csv"),
-                           gt_degree, delimiter=",")
+                        gt_degree, delimiter=",")
                 np.savetxt(os.path.join(result_degree_save_path_mask, f"mask_{count}_{filename_no_ext}.csv"),
-                           mask_degree, delimiter=",")
-
+                        mask_degree, delimiter=",")
 
             ei_time = time.time()
-            print(f"Processed a batch of {batch_size} images in {ei_time - si_time:.2f}s")
+            elapsed_time = ei_time - s_time  # 배치 처리에 걸린 시간
+            # 배치 처리 후 진행바 업데이트
+            pbar.update(batch_size)
+            # 진행바에 경과 시간 및 현재 진행률을 postfix로 표시
+            percent = (count / total_test_images) * 100 if total_test_images > 0 else 0
+            pbar.set_postfix({"elapsed": f"{elapsed_time:.2f}s", "percent": f"{percent:.2f}%"})
 
-        total_time = time.time() - s_time
-        print(f"Total test time: {total_time:.2f}s")
+        pbar.close()
+        print("Test completed: 100%")
+
 
     def forward(self, masked_image, mask, gt_image):
         self.real_A = masked_image

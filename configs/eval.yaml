@@ -1,8 +1,6 @@
-batch_size: 1
+batch_size: 16
 data_root: /media/juneyonglee/My Book/Preprocessed/UST21/test
-gpu_ids:
-  - 0
-  - 1
+gpu_ids: [0, 1]
 land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
 mask_mode: 2
 mask_root: /media/juneyonglee/My Book/Preprocessed/UST21/mask/test/10
@@ -11,7 +9,7 @@ max_epochs: null
 model_path: /home/juneyonglee/MyData/5th_years/ust21_chl_8day/g_1000000.pth
 model_save_path: null
 n_threads: 6
-num_iters: 800000
+num_iters: 1000000
 num_workers: 16
 target_size: 256
 warmup_batchs: 1500

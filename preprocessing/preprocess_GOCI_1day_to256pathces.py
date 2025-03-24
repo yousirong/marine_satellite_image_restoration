@@ -15,7 +15,7 @@ from skimage.transform import resize
 import matplotlib.patches as patches
 
 # ======================== Path Definitions =========================
-data_base = '/media/juneyonglee/GOCI_vol2/GOCI/L2_Rrs'  # GOCI RRS 데이터(.he5)가 있는 루트 경로
+data_base = '/media/juneyonglee/GOCI_vol1/GOCI/L2_Rrs'  # GOCI RRS 데이터(.he5)가 있는 루트 경로
 save_base = '/media/juneyonglee/My Book/Preprocessed/GOCI_RRS'
 mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy'  # GOCI용 육지-해양 마스크 (.npy)
 
@@ -24,7 +24,7 @@ band_lst = [2, 3, 4]
 
 # ======================== Configure Logging =========================
 logging.basicConfig(
-    filename='preprocessing_goci_rrs.log',
+    filename='preprocessing_goci_rrs_43to45.log',
     filemode='a',
     format='%(asctime)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -55,8 +55,8 @@ except Exception as e:
     raise
 
 # ======================== Define Regions ============================
-top_left_y, top_left_x = 2560, 1536   # (y, x)
-bottom_right_y, bottom_right_x = 3072, 3072  # (y, x)
+top_left_y, top_left_x = 2048, 1536   # (y, x)
+bottom_right_y, bottom_right_x = 2560, 3072  # (y, x)
 
 # ================== Create Necessary Directories =====================
 pcts = [str(i) for i in range(0, 101, 10)]  # ['0','10','20',...,'100']
@@ -323,9 +323,9 @@ def main():
                         help='Maximum number of worker processes (default: 4)')
     parser.add_argument('--num_patches', type=int, default=100,
                         help='Number of random patches per day per band (default: 256)')
-    parser.add_argument('--top_left', type=int, nargs=2, default=[2560, 1536],
+    parser.add_argument('--top_left', type=int, nargs=2, default=[2048, 1536],
                         help='Top-left (y x) of patch region (default: 2560 1536)')
-    parser.add_argument('--bottom_right', type=int, nargs=2, default=[3072, 3072],
+    parser.add_argument('--bottom_right', type=int, nargs=2, default=[2560, 3072],
                         help='Bottom-right (y x) of patch region (default: 3072 3072)')
     args = parser.parse_args()
 

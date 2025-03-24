@@ -12,7 +12,7 @@ import logging
 import argparse
 
 # ======================== Path Definitions =========================
-data_base = '/media/juneyonglee/GOCI_vol2/GOCI/L2_Rrs'  # GOCI RRS 데이터(.he5)가 있는 루트 경로
+data_base = '/media/juneyonglee/GOCI_vol1/GOCI/L2_Rrs'  # GOCI RRS 데이터(.he5)가 있는 루트 경로
 save_base = '/media/juneyonglee/My Book/Preprocessed/GOCI_RRS/mask'
 mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy'  # GOCI용 육지-해양 마스크 (.npy)
 
@@ -312,13 +312,13 @@ def main():
     parser = argparse.ArgumentParser(
         description="Process GOCI RRS time-slice data for Band 2,3,4, extract random patches, and save as PNG."
     )
-    parser.add_argument('--max_processes', type=int, default=4,
+    parser.add_argument('--max_processes', type=int, default=16,
                         help='Maximum number of worker processes (default: 4)')
     parser.add_argument('--num_patches', type=int, default=10,
                         help='Number of random patches to extract per file/time (default: 100)')
-    parser.add_argument('--top_left', type=int, nargs=2, default=[2560, 1536],
+    parser.add_argument('--top_left', type=int, nargs=2, default=[3072, 1536],
                         help='Top-left coords (y x) for patch sampling (default: 2560 1536)')
-    parser.add_argument('--bottom_right', type=int, nargs=2, default=[3072, 3072],
+    parser.add_argument('--bottom_right', type=int, nargs=2, default=[3584, 2560],
                         help='Bottom-right coords (y x) for patch sampling (default: 3072 3072)')
     args = parser.parse_args()
 

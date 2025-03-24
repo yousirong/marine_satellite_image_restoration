@@ -1,0 +1,57 @@
+2025-03-18 16:52:19,918 - INFO - Land-Sea mask loaded successfully.
+2025-03-18 16:52:34,849 - INFO - Total boundary coordinates found for specified boxes: 18735
+2025-03-18 16:52:34,849 - INFO - Sample boundary coordinates: [(2048, 1942), (2048, 2429), (2049, 1942), (2049, 2429), (2049, 2430), (2049, 2431), (2050, 1942), (2050, 2431), (2051, 1942), (2051, 2431)]
+2025-03-18 16:52:34,855 - INFO - Included boundary coordinates saved to 53to55_boundary_coordinates_included_GOCI.csv
+2025-03-18 16:52:34,864 - INFO - Loaded boundary coordinates from 53to55_boundary_coordinates_included_GOCI.csv
+2025-03-18 16:52:35,002 - INFO - Plotted 18735 boundary points.
+2025-03-19 00:04:14,743 - INFO - Land-Sea mask loaded successfully.
+2025-03-19 00:04:14,745 - INFO - Created 300 boxes with size 512x512.
+2025-03-19 00:04:16,177 - INFO - Mask image displayed for plotting boxes.
+2025-03-19 00:04:23,040 - INFO - Boxes plotted on the mask image.
+2025-03-19 00:04:23,041 - INFO - Box 106 coordinates - Top-Left: (3072, 2560), Bottom-Right: (3584, 3072).
+2025-03-19 00:04:23,041 - INFO - Box 107 coordinates - Top-Left: (3584, 2560), Bottom-Right: (4096, 3072).
+2025-03-19 00:04:23,041 - INFO - Box 108 coordinates - Top-Left: (4096, 2560), Bottom-Right: (4608, 3072).
+2025-03-19 00:04:23,041 - INFO - Box 109 coordinates - Top-Left: (4608, 2560), Bottom-Right: (5120, 3072).
+2025-03-19 00:04:23,041 - INFO - Box 110 coordinates - Top-Left: (5120, 2560), Bottom-Right: (5632, 3072).
+2025-03-19 00:04:23,041 - INFO - Box 126 coordinates - Top-Left: (3072, 3072), Bottom-Right: (3584, 3584).
+2025-03-19 00:04:23,041 - INFO - Box 127 coordinates - Top-Left: (3584, 3072), Bottom-Right: (4096, 3584).
+2025-03-19 00:04:23,041 - INFO - Box 129 coordinates - Top-Left: (4608, 3072), Bottom-Right: (5120, 3584).
+2025-03-19 00:04:23,041 - INFO - Box 130 coordinates - Top-Left: (5120, 3072), Bottom-Right: (5632, 3584).
+2025-03-19 00:04:23,041 - INFO - Box 146 coordinates - Top-Left: (3072, 3584), Bottom-Right: (3584, 4096).
+2025-03-19 00:04:23,041 - INFO - Box 147 coordinates - Top-Left: (3584, 3584), Bottom-Right: (4096, 4096).
+2025-03-19 00:04:23,042 - INFO - Box 148 coordinates - Top-Left: (4096, 3584), Bottom-Right: (4608, 4096).
+2025-03-19 00:04:23,042 - INFO - Box 149 coordinates - Top-Left: (4608, 3584), Bottom-Right: (5120, 4096).
+2025-03-19 00:04:23,042 - INFO - Box 166 coordinates - Top-Left: (3072, 4096), Bottom-Right: (3584, 4608).
+2025-03-19 00:04:23,042 - INFO - Box 167 coordinates - Top-Left: (3584, 4096), Bottom-Right: (4096, 4608).
+2025-03-19 00:04:23,042 - INFO - Box 168 coordinates - Top-Left: (4096, 4096), Bottom-Right: (4608, 4608).
+2025-03-19 00:05:01,231 - INFO - Found 33805 boundary coordinates in specified boxes.
+2025-03-19 00:05:01,231 - INFO - Total boundary coordinates found for specified boxes: 33805
+2025-03-19 00:05:01,231 - INFO - Sample boundary coordinates: [(2560, 3483), (2560, 4425), (2560, 4426), (2561, 3483), (2561, 4426), (2561, 4427), (2562, 3483), (2562, 4427), (2562, 4428), (2563, 3482)]
+2025-03-19 00:05:01,241 - INFO - Included boundary coordinates saved to specific_boundary_coordinates_included_UST21.csv
+2025-03-19 00:05:01,242 - ERROR - CSV file '146to149_boundary_coordinates_included_UST21.csv' not found.
+2025-03-19 00:05:41,444 - INFO - Land-Sea mask loaded successfully.
+2025-03-19 00:05:41,445 - INFO - Created 300 boxes with size 512x512.
+2025-03-19 00:05:41,641 - INFO - Mask image displayed for plotting boxes.
+2025-03-19 00:05:45,160 - INFO - Boxes plotted on the mask image.
+2025-03-19 00:05:45,160 - INFO - Box 106 coordinates - Top-Left: (3072, 2560), Bottom-Right: (3584, 3072).
+2025-03-19 00:05:45,160 - INFO - Box 107 coordinates - Top-Left: (3584, 2560), Bottom-Right: (4096, 3072).
+2025-03-19 00:05:45,160 - INFO - Box 108 coordinates - Top-Left: (4096, 2560), Bottom-Right: (4608, 3072).
+2025-03-19 00:05:45,160 - INFO - Box 109 coordinates - Top-Left: (4608, 2560), Bottom-Right: (5120, 3072).
+2025-03-19 00:05:45,160 - INFO - Box 110 coordinates - Top-Left: (5120, 2560), Bottom-Right: (5632, 3072).
+2025-03-19 00:05:45,160 - INFO - Box 126 coordinates - Top-Left: (3072, 3072), Bottom-Right: (3584, 3584).
+2025-03-19 00:05:45,160 - INFO - Box 127 coordinates - Top-Left: (3584, 3072), Bottom-Right: (4096, 3584).
+2025-03-19 00:05:45,160 - INFO - Box 128 coordinates - Top-Left: (4096, 3072), Bottom-Right: (4608, 3584).
+2025-03-19 00:05:45,160 - INFO - Box 129 coordinates - Top-Left: (4608, 3072), Bottom-Right: (5120, 3584).
+2025-03-19 00:05:45,160 - INFO - Box 130 coordinates - Top-Left: (5120, 3072), Bottom-Right: (5632, 3584).
+2025-03-19 00:05:45,160 - INFO - Box 146 coordinates - Top-Left: (3072, 3584), Bottom-Right: (3584, 4096).
+2025-03-19 00:05:45,160 - INFO - Box 147 coordinates - Top-Left: (3584, 3584), Bottom-Right: (4096, 4096).
+2025-03-19 00:05:45,160 - INFO - Box 148 coordinates - Top-Left: (4096, 3584), Bottom-Right: (4608, 4096).
+2025-03-19 00:05:45,160 - INFO - Box 149 coordinates - Top-Left: (4608, 3584), Bottom-Right: (5120, 4096).
+2025-03-19 00:05:45,160 - INFO - Box 166 coordinates - Top-Left: (3072, 4096), Bottom-Right: (3584, 4608).
+2025-03-19 00:05:45,161 - INFO - Box 167 coordinates - Top-Left: (3584, 4096), Bottom-Right: (4096, 4608).
+2025-03-19 00:05:45,161 - INFO - Box 168 coordinates - Top-Left: (4096, 4096), Bottom-Right: (4608, 4608).
+2025-03-19 00:06:23,131 - INFO - Found 33805 boundary coordinates in specified boxes.
+2025-03-19 00:06:23,132 - INFO - Total boundary coordinates found for specified boxes: 33805
+2025-03-19 00:06:23,132 - INFO - Sample boundary coordinates: [(2560, 3483), (2560, 4425), (2560, 4426), (2561, 3483), (2561, 4426), (2561, 4427), (2562, 3483), (2562, 4427), (2562, 4428), (2563, 3482)]
+2025-03-19 00:06:23,142 - INFO - Included boundary coordinates saved to specific_boundary_coordinates_included_UST21.csv
+2025-03-19 00:06:23,143 - ERROR - CSV file '106to168_boundary_coordinates_included_UST21.csv' not found.
