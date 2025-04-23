@@ -16,7 +16,7 @@ import matplotlib.patches as patches
 
 # ======================== Path Definitions =========================
 data_base = '/media/juneyonglee/GOCI_vol1/GOCI/L2_Rrs'  # GOCI RRS 데이터(.he5)가 있는 루트 경로
-save_base = '/media/juneyonglee/My Book/Preprocessed/GOCI_RRS'
+save_base = '/media/juneyonglee/My Book1/Preprocessed/GOCI_RRS'
 mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy'  # GOCI용 육지-해양 마스크 (.npy)
 
 # 사용할 밴드 리스트
@@ -325,7 +325,7 @@ def main():
                         help='Number of random patches per day per band (default: 256)')
     parser.add_argument('--top_left', type=int, nargs=2, default=[2048, 1536],
                         help='Top-left (y x) of patch region (default: 2560 1536)')
-    parser.add_argument('--bottom_right', type=int, nargs=2, default=[2560, 3072],
+    parser.add_argument('--bottom_right', type=int, nargs=2, default=[3584, 3072],
                         help='Bottom-right (y x) of patch region (default: 3072 3072)')
     args = parser.parse_args()
 

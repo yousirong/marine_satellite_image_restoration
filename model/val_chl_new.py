@@ -296,5 +296,5 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path, sample_size=No
             mae_=mae_val,
             title=f"Loss {loss_rate}-{int(loss_rate)+9}%",
             kind="scatter",  # scatter 시각화로 변경
-            scatter_kws={'s': 1, 'alpha': 1}
+            scatter_kws={'s': 1, 'alpha': 0.01}
         )

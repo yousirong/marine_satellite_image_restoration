@@ -404,8 +404,8 @@ def main():
     parser = argparse.ArgumentParser(description="Process 8-day moving average and extract random patches within a rectangle using multiprocessing.")
     parser.add_argument('--max_processes', type=int, default=4, help='Maximum number of worker processes (default: 4)')
     parser.add_argument('--num_patches', type=int, default=256, help='Number of random patches to extract per window (default: 256)')
-    parser.add_argument('--top_left', type=int, nargs=2, default=[3584,3072], help='Top-left coordinates (y x) of the rectangle (default: 3584 3072)')
-    parser.add_argument('--bottom_right', type=int, nargs=2, default=[4096,5120], help='Bottom-right coordinates (y x) of the rectangle (default: 4096 5120)')
+    parser.add_argument('--top_left', type=int, nargs=2, default=[2560,3072], help='Top-left coordinates (y x) of the rectangle (default: 3584 3072)')
+    parser.add_argument('--bottom_right', type=int, nargs=2, default=[4608,5632], help='Bottom-right coordinates (y x) of the rectangle (default: 4096 5120)')
     args = parser.parse_args()
 
     MAX_PROCESSES = args.max_processes

@@ -1,5 +1,5 @@
 ## python model/run.py --c configs/train.yaml
-# tensorboard --logdir log --bind_all --port 6006
+# tensorboard --logdir logs --bind_all --port 6006
 
 project_name: chl-a
 exp_name: UST21_CHL_8day

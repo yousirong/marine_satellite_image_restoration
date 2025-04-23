@@ -269,9 +269,9 @@ def main():
                         help='Maximum number of worker processes (default: 4)')
     parser.add_argument('--num_patches', type=int, default=100,
                         help='Number of random patches to extract per day (default: 100)')
-    parser.add_argument('--top_left', type=int, nargs=2, default=[3584, 3072],
+    parser.add_argument('--top_left', type=int, nargs=2, default=[2560, 3072],
                         help='Top-left coords (y x) for patch sampling (default: 3584 3072)')
-    parser.add_argument('--bottom_right', type=int, nargs=2, default=[4096, 5120],
+    parser.add_argument('--bottom_right', type=int, nargs=2, default=[4608, 5632],
                         help='Bottom-right coords (y x) for patch sampling (default: 4096 5120)')
     args = parser.parse_args()
 

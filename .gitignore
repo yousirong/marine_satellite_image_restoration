@@ -22,4 +22,5 @@ anaconda.sh
 model/__pycache__/*.cpython-39.pyc
 preprocessing/is_land_on_GOCI_modified_1_999.npy
 Notebook/land_sea_mask.npy
+*.log
 preprocessing_goci_rrs_43to45.log
