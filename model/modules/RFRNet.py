@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from modules.partialconv2d import PartialConv2d
-from modules.Attention import AttentionModule
+from model.modules.partialconv2d import PartialConv2d
+from model.modules.Attention import AttentionModule
 from torchvision import models
 
 class VGG16FeatureExtractor(nn.Module):
@@ -24,7 +24,7 @@ class VGG16FeatureExtractor(nn.Module):
             func = getattr(self, 'enc_{:d}'.format(i + 1))
             results.append(func(results[-1]))
         return results[1:]
-    
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -71,7 +71,7 @@ class RFRModule(nn.Module):
                      nn.ReLU(inplace = True)]
             in_channel = out_channel
             setattr(self, name, nn.Sequential(*block))
-        
+
         for i in range(3, 6):
             name = 'enc_{:d}'.format(i + 1)
             block = [nn.Conv2d(in_channel, out_channel, 3, 1, 2, dilation = 2, bias = False),
@@ -85,23 +85,23 @@ class RFRModule(nn.Module):
                      nn.BatchNorm2d(in_channel),
                      nn.LeakyReLU(0.2, inplace = True)]
             setattr(self, name, nn.Sequential(*block))
-            
+
 
         block = [nn.ConvTranspose2d(1024, 512, 4, 2, 1, bias = False),
                  nn.BatchNorm2d(512),
                  nn.LeakyReLU(0.2, inplace = True)]
         self.dec_3 = nn.Sequential(*block)
-        
+
         block = [nn.ConvTranspose2d(768, 256, 4, 2, 1, bias = False),
                  nn.BatchNorm2d(256),
                  nn.LeakyReLU(0.2, inplace = True)]
         self.dec_2 = nn.Sequential(*block)
-        
+
         block = [nn.ConvTranspose2d(384, 64, 4, 2, 1, bias = False),
                  nn.BatchNorm2d(64),
                  nn.LeakyReLU(0.2, inplace = True)]
         self.dec_1 = nn.Sequential(*block)
-        
+
     def forward(self, input, mask):
 
         h_dict = {}  # for the output of enc_N
@@ -114,7 +114,7 @@ class RFRModule(nn.Module):
             h_key = 'h_{:d}'.format(i)
             h_dict[h_key] = getattr(self, l_key)(h_dict[h_key_prev])
             h_key_prev = h_key
-        
+
         h = h_dict[h_key]
         for i in range(self.layer_size - 1, 0, -1):
             enc_h_key = 'h_{:d}'.format(i)
@@ -175,14 +175,14 @@ class RFRNet(nn.Module):
         x5 = torch.cat([in_image, x4], dim = 1)
         m5 = torch.cat([mask, m4], dim = 1)
         #print(in_image.shape)
-        
+
         x5, _ = self.tail1(x5, m5)
         x5 = F.leaky_relu(x5, inplace = True)
         x6 = self.tail2(x5)
         x6 = torch.cat([x5,x6], dim = 1)
         output = self.out(x6)
         return output, None
-    
+
     def train(self, mode=True, finetune = False):
         super().train(mode)
         if finetune:

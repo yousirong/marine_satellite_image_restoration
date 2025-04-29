@@ -1,9 +1,9 @@
 import torch
 import torch.optim as optim
-from utils.io import load_ckpt, save_ckpt, is_available_to_store
+from model.utils.io import load_ckpt, save_ckpt, is_available_to_store
 from torchvision import transforms
 from torchvision.utils import make_grid, save_image
-from modules.RFRNet import RFRNet, VGG16FeatureExtractor
+from model.modules.RFRNet import RFRNet, VGG16FeatureExtractor
 import os
 import time
 from torch.utils.tensorboard import SummaryWriter
