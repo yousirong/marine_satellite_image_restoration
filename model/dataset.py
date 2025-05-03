@@ -1,3 +1,4 @@
+
 import os
 import cv2
 import numpy as np
@@ -33,6 +34,10 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         img, mask = self.load_item(index, test_mode=not self.training)
+        # 만약 load_item이 None을 반환했다면, 다음 인덱스(혹은 랜덤)로 넘어가서 재시도
+        if img is None or mask is None:
+            next_idx = (index + 1) % len(self.data)
+            return self.__getitem__(next_idx)
         filename = os.path.basename(self.data[index])  # Extract just the filename
         return self.to_tensor(img), self.to_tensor(mask), filename
 
@@ -41,7 +46,7 @@ class Dataset(torch.utils.data.Dataset):
 
         img = None
         land_removed_mask = None
-
+        ocean_mask_ratio = 0.0
         for attempt in range(max_attempts):
             # Load the image (GT)
             img = cv2.imread(self.data[index], cv2.IMREAD_UNCHANGED)
@@ -63,8 +68,9 @@ class Dataset(torch.utils.data.Dataset):
                 # print(f"Attempt {attempt+1}/{max_attempts}: Unexpected number of channels ({img.shape[2]}) in image: {self.data[index]}")
                 continue  # 다음 시도로 넘어감
 
-            # Replace NaNs with 0
+            # NaN 및 특수값 처리
             img = img.astype(np.float32)
+            img[img == -999] = np.nan
             img[np.isnan(img)] = 0
 
             # Resize the image to the target size if it's not the correct size
@@ -76,12 +82,7 @@ class Dataset(torch.utils.data.Dataset):
 
             # Step 2: Load mask image
             if test_mode:
-                # # For testing, generate mask based on image data
-                # # Assuming that NaN or 0 in image indicates missing data
-                # mask = ((img == 0).any(axis=0)).astype(np.uint8)  # Shape: (H, W)
-                # mask = 1 - mask  # Invert mask: 1 for known, 0 for missing
-                # mask = np.expand_dims(mask, axis=0)  # Shape: (1, H, W)
-                # mask = np.repeat(mask, 3, axis=0)  # Shape: (3, H, W)
+
                 mask = self.load_mask(img, index)
             else:
                 # For training, load mask from mask files
@@ -100,7 +101,7 @@ class Dataset(torch.utils.data.Dataset):
 
             # Step 5: Calculate mask coverage within ocean pixels
             # 해양 영역을 정의 (sea_mask == 1)
-            sea_mask = (land_sea_mask_patch != 1).astype(np.uint8)  # 육지: 1, 해양: 0 -> 해양: 1
+            sea_mask = (land_sea_mask_patch == 1).astype(np.uint8)  # 육지: 1, 해양: 0 -> 해양: 1
             total_ocean_pixels = sea_mask.sum()
             if total_ocean_pixels == 0:
                 # print(f"Attempt {attempt+1}/{max_attempts}: No ocean pixels found for image: {self.data[index]}")
@@ -113,24 +114,10 @@ class Dataset(torch.utils.data.Dataset):
             # 해양 영역 내 마스크 비율
             ocean_mask_ratio = masked_ocean_pixels_count / total_ocean_pixels
 
-            # 디버깅 정보 추가
-            # print(f"Attempt {attempt+1}/{max_attempts}: Ocean Mask Ratio = {ocean_mask_ratio*100:.2f}% for image: {self.data[index]}")
-
             if ocean_mask_ratio >= 0.01:
-                # Optional data augmentation
-                if self.training and self.augment:
-                    if np.random.binomial(1, 0.5) > 0:
-                        img = img[:, ::-1, ...]  # Flip image horizontally
-                        land_removed_mask = land_removed_mask[:, ::-1, ...]
-
-                # Convert the images and masks to tensors
                 img_tensor = self.to_tensor(img)
                 mask_tensor = self.to_tensor(land_removed_mask)
-
                 return img_tensor, mask_tensor
-            else:
-                # print(f"Attempt {attempt+1}/{max_attempts}: Mask ocean area too small ({ocean_mask_ratio*100:.2f}%) for image: {self.data[index]}")
-                continue  # 다음 시도로 넘어감
 
         # After max_attempts, log and return the last mask (even if ocean area is small)
         # print(f"Could not find a mask with ocean area >=1% for image: {self.data[index]} after {max_attempts} attempts, using the last mask.")
@@ -141,32 +128,26 @@ class Dataset(torch.utils.data.Dataset):
     def load_mask(self, img, index):
         """
         Load the mask for a specific image.
+        원본 PNG가 0/255 이므로,
+        검은색(0)=복원 대상→1, 흰색(255)=복원 제외→0 으로 만듭니다.
         """
         imgh, imgw = img.shape[1:3]
-
-        if len(self.mask_data) == 0:
-            raise ValueError("Mask data is empty. Please check the mask directory and ensure that masks are available.")
-
-        # Based on the mask type, randomly select a mask
-        mask_index = random.randint(0, len(self.mask_data) - 1)
-        mask = cv2.imread(self.mask_data[mask_index], cv2.IMREAD_GRAYSCALE)
-
-        # Check if the mask is loaded successfully
+        mask_path = self.mask_data[random.randint(0, len(self.mask_data)-1)]
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
         if mask is None:
-            print(f"Failed to load mask for index {mask_index}, using a blank mask instead.")
             mask = np.zeros((imgh, imgw), dtype=np.uint8)
 
-        # Resize the mask to match the image size
+        # 리사이즈
         mask = self.resize(mask, False)
 
-        # Ensure the mask is binary
-        mask = (mask > 0).astype(np.uint8)  # 0 or 1
+        # 0→1, 255→0
+        mask = (mask == 0).astype(np.uint8)
 
-        # Stack into three channels if needed
-        mask = np.expand_dims(mask, axis=0)  # Shape: (1, H, W)
-        mask = np.repeat(mask, 3, axis=0)  # Shape: (3, H, W)
+        # 채널 차원 추가
+        mask = np.expand_dims(mask, 0)   # (1, H, W)
+        mask = np.repeat(mask, 3, 0)     # (3, H, W)
 
-        # Apply mask reversal if specified
+        # mask_reverse 옵션
         if self.mask_reverse:
             mask = 1 - mask
 
@@ -201,23 +182,18 @@ class Dataset(torch.utils.data.Dataset):
 
     def remove_land_from_mask(self, mask_image, land_sea_mask_patch):
         """
-        Remove land areas from the mask and keep only ocean areas.
-        육지 부분을 1로 설정하고 해양 부분은 mask_image 값을 0으로 설정합니다.
+        mask_image: 1=복원 대상, 0=제외
+        land_sea_mask_patch: 1=육지, 0=해양
+        → 최종: 바다이면서 원래 복원 대상이었던 곳만 1, 나머진 0
         """
-        # 육지인 부분을 1로 설정하여 복원 불필요
-        # 해양인 부분은 기존 mask_image 값을 유지 (복원)
-        land_value = 1  # 육지를 나타내는 실제 값으로 수정
-        sea_mask = (land_sea_mask_patch != land_value).astype(np.uint8)  # 해양: 1, 육지: 0
+        # sea_mask: 바다=1, 육지=0
+        sea_mask = (land_sea_mask_patch == 0).astype(np.uint8)
 
-        # 해양 영역만 남기고 마스크 적용
-        mask_modified = mask_image * sea_mask  # 해양 영역에서만 마스크 적용
+        # 최종 마스크: sea_mask * mask_image
+        mask_mod = mask_image * sea_mask
 
-        # Debugging: 확인
-        assert mask_modified.shape == mask_image.shape, f"mask_modified shape {mask_modified.shape} does not match mask_image shape {mask_image.shape}"
-        unique_vals = np.unique(mask_modified)
-        assert set(unique_vals.tolist()).issubset({0, 1}), f"mask_modified should only contain 0 and 1: {unique_vals}"
+        return mask_mod
 
-        return mask_modified
 
     def extract_row_col(self, filename):
         """
@@ -232,13 +208,16 @@ class Dataset(torch.utils.data.Dataset):
 
     def load_land_sea_mask(self, land_mask_path):
         """
-        Load the land-sea mask from a .npy file and convert values accordingly.
+        Load the land-sea mask from a .npy file and normalize values:
+        원본 mask: 1=해양?, 999=육지  →  변환 mask: 0=해양, 1=육지
         """
         land_sea_mask = np.load(land_mask_path)
-        unique_vals = np.unique(land_sea_mask)
-        print(f"Loaded land-sea mask with shape: {land_sea_mask.shape}, dtype: {land_sea_mask.dtype}")
-        print(f"Unique values in land_sea_mask: {unique_vals}")
+        print("Before conversion, unique values:", np.unique(land_sea_mask))
+        # 999 는 육지 → 1, 나머지(1) 는 해양 → 0
+        land_sea_mask = np.where(land_sea_mask == 999, 0, 1).astype(np.uint8)
+        print("After conversion, unique values:", np.unique(land_sea_mask))
         return land_sea_mask
+
 
     def resize(self, img, aspect_ratio_kept=True, fixed_size=False, centerCrop=False):
         """
@@ -264,8 +243,9 @@ class Dataset(torch.utils.data.Dataset):
                 img = np.expand_dims(img, axis=0)
 
             # Convert NumPy array to PyTorch tensor
-            return torch.Tensor(img)
-
+            # return torch.Tensor(img)
+            t = torch.from_numpy(img.astype(np.float32)).clamp(0,255) / 255.0
+            return t
         # If the input is already a PyTorch tensor, just return it as-is
         elif isinstance(img, torch.Tensor):
             return img

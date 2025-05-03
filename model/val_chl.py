@@ -13,19 +13,19 @@ import re
 
 # ust21
 # land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy'
-# goci 
+# goci
 land_sea_mask_path ='/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
 # preprocessing/is_land_on_GOCI_modified_1_999.npy
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
 
-def plot_parity(filename, loss_rate, true, pred, rmse_, mape_, vmin, vmax, kind="scatter", 
-                xlabel="true (mg/m$^3$)", ylabel="predict (mg/m$^3$)", title="Loss 50-60%", 
+def plot_parity(filename, loss_rate, true, pred, rmse_, mape_, vmin, vmax, kind="scatter",
+                xlabel="true (mg/m$^3$)", ylabel="predict (mg/m$^3$)", title="Loss 50-60%",
                 hist2d_kws=None, scatter_kws=None, kde_kws=None,
                 equal=True, metrics=True, metrics_position="lower right",
                 figsize=(8, 8), ax=None, save_file=True):
-    
+
     if not ax:
         fig, ax = plt.subplots(figsize=figsize)
 
@@ -111,7 +111,7 @@ def save_land_mask_image(land_mask_cropped, save_path):
     Save the cropped land-sea mask as an image, where land is black (255) and sea is white (0).
     """
     # Create a binary mask image (land as black, sea as white)
-    mask_img = land_mask_cropped 
+    mask_img = land_mask_cropped
 
     # # Ensure the save path has the correct extension and remove .csv from the filename if present
     # save_path_with_extension = save_path if save_path.lower().endswith('.png') else save_path + '_mask.png'
@@ -125,7 +125,7 @@ def save_land_mask_image(land_mask_cropped, save_path):
     # plt.title(f'Land-Sea Mask')
     # plt.xticks([])
     # plt.yticks([])
-    
+
     # # Save the mask image with a proper title
     # plt.savefig(save_path_with_extension.replace('.png', '_mask_bar.png'), dpi=300, bbox_inches='tight')
     # plt.close()
@@ -150,7 +150,7 @@ def save_colormap_image_with_land_mask(data, land_sea_mask_path, row, col, save_
         match = re.search(r'(\d{8})', recon_file_name)  # Extract the date part
         if match:
             date_str = match.group(1)
-    
+
     land_mask_full = np.load(land_sea_mask_path)
     land_mask_cropped = land_mask_full[row:row + 256, col:col + 256]
     data_normalized, vmin, vmax = normalize_data_dynamic(data)

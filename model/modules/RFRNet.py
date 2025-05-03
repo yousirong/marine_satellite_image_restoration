@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.modules.partialconv2d import PartialConv2d
-from model.modules.Attention import AttentionModule
+from modules.partialconv2d import PartialConv2d
+from modules.Attention import AttentionModule
 from torchvision import models
 
 class VGG16FeatureExtractor(nn.Module):

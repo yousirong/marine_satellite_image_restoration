@@ -17,7 +17,7 @@ import matplotlib.patches as patches
 # ======================== Path Definitions =========================
 data_base = '/media/juneyonglee/GOCI_vol1/GOCI/L2_Rrs'  # GOCI RRS 데이터(.he5)가 있는 루트 경로
 save_base = '/media/juneyonglee/My Book1/Preprocessed/GOCI_RRS'
-mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy'  # GOCI용 육지-해양 마스크 (.npy)
+mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'  # GOCI용 육지-해양 마스크 (.npy)
 
 # 사용할 밴드 리스트
 band_lst = [2, 3, 4]
@@ -162,7 +162,6 @@ def check_pct(img, mask):
     loss_pct = (missing_count / ocean_vals.size) * 100
     return loss_pct
 
-
 def save_patch_image(patch, file_path):
     """
     Saves a chlorophyll-a patch as a TIFF file using the original float data.
@@ -181,7 +180,7 @@ def compute_ocean_ratio(mask_patch):
     mask_patch: 256x256, where ocean=1, land=999
     해양(==1) 픽셀의 비율(0~1)을 계산
     """
-    total_pixels = mask_patch.size  # =256*256
+    total_pixels = mask_patch.size  # 256*256
     ocean_pixels = np.count_nonzero(mask_patch == 1)
     return ocean_pixels / total_pixels
 

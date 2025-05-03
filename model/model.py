@@ -1,9 +1,9 @@
 import torch
 import torch.optim as optim
-from model.utils.io import load_ckpt, save_ckpt, is_available_to_store
+from utils.io import load_ckpt, save_ckpt, is_available_to_store
 from torchvision import transforms
 from torchvision.utils import make_grid, save_image
-from model.modules.RFRNet import RFRNet, VGG16FeatureExtractor
+from modules.RFRNet import RFRNet, VGG16FeatureExtractor
 import os
 import time
 from torch.utils.tensorboard import SummaryWriter
@@ -67,9 +67,6 @@ class RFRNetModel():
     def save_batch_images_grid(self, images, save_path, nrow=8, padding=2, normalize=True, is_mask=False):
         """
         Save a batch of images as a grid.
-        - If is_mask=True: Save as grayscale PNG.
-        - Else: Apply jet colormap to raw pixel values (0.01-10), normalize, and save as TIFF.
-
         Args:
             images (torch.Tensor): Batch of images (B, C, H, W).
             save_path (str): The path where the image grid should be saved (including extension).
@@ -123,11 +120,14 @@ class RFRNetModel():
                 masks = (masks > 0).float()  # Ensure the mask is a float tensor (0 for land, 1 for ocean)
 
                 # Masked image generation
-                masked_images = gt_images * masks
-
+                # masked_images = gt_images * masks
+                masked_images = gt_images * (1 - masks)
                 # Forward pass
                 masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
-
+                if torch.isnan(fake_B).any():
+                    raise RuntimeError("NaN in network output (fake_B)!")
+                if torch.isnan(comp_B).any():
+                    raise RuntimeError("NaN in composited output (comp_B)!")
                 # Update parameters
                 self.update_parameters()
                 self.iter += 1
@@ -141,7 +141,7 @@ class RFRNetModel():
                     self.l1_loss_val = 0.0
 
                 # Save image grid every 100 iterations
-                if self.iter % 10000 == 0:
+                if self.iter % 100 == 0:
                     save_directory = os.path.join(save_path, 'training')
                     os.makedirs(save_directory, exist_ok=True)
 
@@ -150,7 +150,9 @@ class RFRNetModel():
                     self.save_batch_images_grid(comp_B, f"{file_prefix}_img")
                     self.save_batch_images_grid(fake_B, f"{file_prefix}_fake")
                     self.save_batch_images_grid(masked_image, f"{file_prefix}_masked")
-                    self.save_batch_images_grid(masks, f"{file_prefix}_masks")
+                    # self.save_batch_images_grid(masks, f"{file_prefix}_masks")
+                    inv_masks = 1.0 - masks
+                    self.save_batch_images_grid(inv_masks,    f"{file_prefix}_inv_masks")
 
                 # Save model checkpoint every 10000 iterations
                 if self.iter % 10000 == 0:
@@ -236,7 +238,7 @@ class RFRNetModel():
             # 마스크를 0/1 float 텐서로 변환 (0: 육지, 1: 해양)
             masks = (masks > 0).float()
             # gt_images와 마스크를 곱하여 해양 영역만 추출
-            masked_images = gt_images * masks
+            masked_images = gt_images * (1-masks)
 
             # forward pass (train과 동일한 방식으로 처리)
             masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
@@ -258,7 +260,9 @@ class RFRNetModel():
                 self.save_batch_images_grid(gt_images[k:k+1], gt_file_prefix)
                 self.save_batch_images_grid(masked_image[k:k+1], masked_file_prefix)
                 self.save_batch_images_grid(comp_B[k:k+1], recon_file_prefix)
-                self.save_batch_images_grid(masks[k:k+1], mask_file_prefix)
+                # self.save_batch_images_grid(masks[k:k+1], mask_file_prefix)
+                inv_mask = 1.0 - masks[k:k+1]
+                self.save_batch_images_grid(inv_mask,      mask_file_prefix)
 
                 # 채널별 평균(예: degree 계산) 데이터를 CSV로 저장 (필요한 경우)
                 fake_degree = fake_B[k].mean(dim=0).cpu().numpy()  # 채널 평균

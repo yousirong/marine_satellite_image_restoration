@@ -1,16 +1,42 @@
 ## python model/run.py --c configs/train.yaml
 # tensorboard --logdir logs --bind_all --port 6006
 
-project_name: chl-a
-exp_name: UST21_CHL_8day
-notes: chl_1
+# project_name: chl-a
+# exp_name: UST21_CHL_8day
+# notes: chl_1
 
-data_root: /media/juneyonglee/My Book/Preprocessed/UST21/train
-mask_root: /media/juneyonglee/My Book/Preprocessed/UST21/mask/train
-model_save_path: /home/juneyonglee/MyData/5th_years/ust21_chl_8day/
+# data_root: /media/juneyonglee/My Book/Preprocessed/UST21/train
+# mask_root: /media/juneyonglee/My Book/Preprocessed/UST21/mask/train
+# model_save_path: /home/juneyonglee/MyData/5th_years/ust21_chl_8day/
+# # model_path: model/models/ust_chl_4/g_600000.pth
+# model_path: /home/juneyonglee/MyData/5th_years/ust21_chl_8day/
+# land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
+
+# # Training parameters
+# max_epochs: ~
+# mask_mode: 0
+# batch_size: 36
+# target_size: 256
+# num_iters: 1000000
+# n_threads: 6
+# gpu_ids: [0, 1]
+# save_capacity: 5
+# num_workers: 16
+# warmup_batches: 1500
+
+
+# # GOCI
+project_name: RRS
+exp_name: GOCI_RRS_band2_1day
+notes: RRS
+
+data_root: /media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/band2/train
+mask_root: /media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/mask/band2/train
+model_save_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/
 # model_path: model/models/ust_chl_4/g_600000.pth
-model_path: /home/juneyonglee/MyData/5th_years/ust21_chl_8day/
-land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
+model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/
+# land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy
+land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy
 
 # Training parameters
 max_epochs: ~
@@ -21,31 +47,7 @@ num_iters: 1000000
 n_threads: 6
 gpu_ids: [0, 1]
 save_capacity: 5
-num_workers: 16
+num_workers: 32
 warmup_batches: 1500
-# # GOCI
-# project_name: RRS
-# exp_name: GOCI RRS time data train
-# notes: GOCI RRS
-
-# # data_root: /home/juneyonglee/gocirrs_backup/home/pmilab/Documents/preprocessed_data/GOCI/Chl-a_processed/train/band_3
-# data_root: /media/juneyonglee/My Book/Preprocessed/GOCI/L2_Rrs_newtrain/band_3/band_3
-
-# mask_root: /media/juneyonglee/My Book/data/mask/Train
-# model_save_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/GOCI_RRS_band3_newtrain
-# model_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/GOCI_RRS_band3_newtrain/g_100000.pth
-# land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy
-
-# # Training parameters
-# max_epochs: ~
-# mask_mode: 0
-# batch_size: 32
-# target_size: 256
-# num_iters: 800000
-# n_threads: 6
-# gpu_ids: [0, 1]
-# save_capacity: 5
-# num_workers: 16
-# warmup_batches: 1500
 
 # python model/run.py --c configs/train.yaml
