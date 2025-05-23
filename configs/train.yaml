@@ -33,8 +33,8 @@ notes: RRS
 data_root: /media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/band2/train
 mask_root: /media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/mask/band2/train
 model_save_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/
-# model_path: model/models/ust_chl_4/g_600000.pth
-model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/
+model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/g_10000.pth
+# model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/
 # land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy
 land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy
 

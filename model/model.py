@@ -30,6 +30,19 @@ class RFRNetModel():
         self.writer = None
         self.totensor = transforms.ToTensor()
 
+    def forward(self, masked_image, mask, gt_image):
+        self.real_A = masked_image
+        self.real_B = gt_image
+        self.mask = mask
+        fake_B, _ = self.G(masked_image, mask)
+        self.fake_B = fake_B
+        self.comp_B = self.fake_B * (1 - mask) + self.real_B * mask
+        # 복원(=fake_B) 할 영역이 mask==1(검은색)이 되도록 연산 순서를 뒤집습니다
+        # self.comp_B = self.fake_B * mask + self.real_B * (1 - mask)
+        return masked_image, self.fake_B, self.comp_B
+
+
+
     def initialize_model(self, path=None, train=True, model_save_path=None, gpu_ids=[0]):
         self.G = RFRNet()
         if torch.cuda.device_count() > 1:
@@ -65,31 +78,26 @@ class RFRNetModel():
             self.device = torch.device("cpu")
 
     def save_batch_images_grid(self, images, save_path, nrow=8, padding=2, normalize=True, is_mask=False):
-        """
-        Save a batch of images as a grid.
-        Args:
-            images (torch.Tensor): Batch of images (B, C, H, W).
-            save_path (str): The path where the image grid should be saved (including extension).
-            nrow (int): Number of images per row in the grid.
-            padding (int): Amount of padding between images in the grid.
-            normalize (bool): If True, normalize the tensor values to the 0-1 range for visualization.
-            is_mask (bool): If True, save as grayscale PNG. Else, apply jet colormap and save as TIFF.
-        """
-        # print(f"Images shape: {images.shape}")  # Debugging: 출력
         if not isinstance(images, torch.Tensor):
             raise ValueError(f"Expected images to be a torch.Tensor object, but got: {type(images)}")
 
-        # Make a grid from the batch of images
-        grid = make_grid(images, nrow=nrow, padding=padding, normalize=normalize)
+        # recon 이미지인 경우 RGB -> Grayscale 평균
+        if images.size(1) == 3 and "recon" in save_path:
+            # 평균을 내서 (B, 1, H, W) 로 만듦
+            images = images.mean(dim=1, keepdim=True)
 
-        # Ensure the directory exists before saving
+        # 그리드 만들기 (normalize 필요 시)
+        if normalize:
+            grid = make_grid(images, nrow=nrow, padding=padding, normalize=True)
+        else:
+            # 직접 정규화
+            images = (images - images.min()) / (images.max() - images.min() + 1e-8)
+            grid = make_grid(images, nrow=nrow, padding=padding, normalize=False)
+
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-
-        # Ensure the file path includes a valid extension (e.g., .png)
         if not save_path.endswith('.png'):
             save_path += '.png'
 
-        # Save the grid as an image
         save_image(grid, save_path)
         print(f"Image grid saved at {save_path}")
 
@@ -120,8 +128,10 @@ class RFRNetModel():
                 masks = (masks > 0).float()  # Ensure the mask is a float tensor (0 for land, 1 for ocean)
 
                 # Masked image generation
+                # ust21 일경우
                 # masked_images = gt_images * masks
-                masked_images = gt_images * (1 - masks)
+                #goci 일경우
+                masked_images = gt_images * masks
                 # Forward pass
                 masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
                 if torch.isnan(fake_B).any():
@@ -140,7 +150,7 @@ class RFRNetModel():
                     s_time = time.time()
                     self.l1_loss_val = 0.0
 
-                # Save image grid every 100 iterations
+                # Save image grid every 10000 iterations
                 if self.iter % 100 == 0:
                     save_directory = os.path.join(save_path, 'training')
                     os.makedirs(save_directory, exist_ok=True)
@@ -150,9 +160,8 @@ class RFRNetModel():
                     self.save_batch_images_grid(comp_B, f"{file_prefix}_img")
                     self.save_batch_images_grid(fake_B, f"{file_prefix}_fake")
                     self.save_batch_images_grid(masked_image, f"{file_prefix}_masked")
-                    # self.save_batch_images_grid(masks, f"{file_prefix}_masks")
-                    inv_masks = 1.0 - masks
-                    self.save_batch_images_grid(inv_masks,    f"{file_prefix}_inv_masks")
+                    self.save_batch_images_grid(masks, f"{file_prefix}_masks")
+
 
                 # Save model checkpoint every 10000 iterations
                 if self.iter % 10000 == 0:
@@ -238,7 +247,7 @@ class RFRNetModel():
             # 마스크를 0/1 float 텐서로 변환 (0: 육지, 1: 해양)
             masks = (masks > 0).float()
             # gt_images와 마스크를 곱하여 해양 영역만 추출
-            masked_images = gt_images * (1-masks)
+            masked_images = gt_images * masks
 
             # forward pass (train과 동일한 방식으로 처리)
             masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
@@ -260,9 +269,7 @@ class RFRNetModel():
                 self.save_batch_images_grid(gt_images[k:k+1], gt_file_prefix)
                 self.save_batch_images_grid(masked_image[k:k+1], masked_file_prefix)
                 self.save_batch_images_grid(comp_B[k:k+1], recon_file_prefix)
-                # self.save_batch_images_grid(masks[k:k+1], mask_file_prefix)
-                inv_mask = 1.0 - masks[k:k+1]
-                self.save_batch_images_grid(inv_mask,      mask_file_prefix)
+                self.save_batch_images_grid(masks[k:k+1], mask_file_prefix)
 
                 # 채널별 평균(예: degree 계산) 데이터를 CSV로 저장 (필요한 경우)
                 fake_degree = fake_B[k].mean(dim=0).cpu().numpy()  # 채널 평균
@@ -293,16 +300,6 @@ class RFRNetModel():
 
         pbar.close()
         print("Test completed: 100%")
-
-
-    def forward(self, masked_image, mask, gt_image):
-        self.real_A = masked_image
-        self.real_B = gt_image
-        self.mask = mask
-        fake_B, _ = self.G(masked_image, mask)
-        self.fake_B = fake_B
-        self.comp_B = self.fake_B * (1 - mask) + self.real_B * mask
-        return masked_image, self.fake_B, self.comp_B
 
     def update_parameters(self):
         self.update_G()
@@ -357,18 +354,23 @@ class RFRNetModel():
         real_B_feats = self.lossNet(real_B)
         fake_B_feats = self.lossNet(fake_B)
         comp_B_feats = self.lossNet(comp_B)
+        # TV 는 복원(홀) 영역에서만
+        tv_loss         = self.TV_loss(comp_B * self.mask)
 
-        tv_loss = self.TV_loss(comp_B * (1 - self.mask))
-        style_loss = self.style_loss(real_B_feats, fake_B_feats) + self.style_loss(real_B_feats, comp_B_feats)
-        preceptual_loss = self.preceptual_loss(real_B_feats, fake_B_feats) + self.preceptual_loss(real_B_feats, comp_B_feats)
-        valid_loss = self.l1_loss(real_B, fake_B, self.mask)
-        hole_loss = self.l1_loss(real_B, fake_B, (1 - self.mask))
+        # hole_loss: mask==1 (검은 영역) 에 대한 L1
+        hole_loss       = self.l1_loss(real_B, fake_B, self.mask)
+        # valid_loss: mask==0 (유효 영역) 에 대한 L1
+        valid_loss      = self.l1_loss(real_B, fake_B, (1 - self.mask))
+        style_loss      = self.style_loss(real_B_feats, fake_B_feats) \
+                        + self.style_loss(real_B_feats, comp_B_feats)
+        preceptual_loss = self.preceptual_loss(real_B_feats, fake_B_feats) \
+                        + self.preceptual_loss(real_B_feats, comp_B_feats)
 
         loss_G = (  tv_loss * 0.1
                 + style_loss * 120
                 + preceptual_loss * 0.05
-                + valid_loss * 1
-                + hole_loss * 6)
+                + valid_loss *   1
+                + hole_loss  *   6)
 
         self.l1_loss_val += valid_loss.detach() + hole_loss.detach()
         return loss_G
