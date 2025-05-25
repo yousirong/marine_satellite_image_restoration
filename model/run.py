@@ -2,14 +2,14 @@ import argparse
 import os
 from model import RFRNetModel
 # from model_withvalidation import RFRNetModel_withvalidation
-from dataset import Dataset
+from model.dataset import Dataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from utils.io import load_yaml, build_save_folder
 import torch
 
 # GOCI 1day new validate function
-from val_chl import validate
+from model.val_chl import validate
 # ust21 8day new validate function
 # from val_chl_new import validate
 

@@ -142,7 +142,7 @@ class RFRNetModel():
                 self.update_parameters()
                 self.iter += 1
 
-                if self.iter % 100 == 0:
+                if self.iter % 1000 == 0:
                     e_time = time.time()
                     int_time = e_time - s_time
                     print("Iteration:%d, l1_loss:%.4f, time_taken:%.2f" % (self.iter, self.l1_loss_val / 50, int_time))
@@ -151,7 +151,7 @@ class RFRNetModel():
                     self.l1_loss_val = 0.0
 
                 # Save image grid every 10000 iterations
-                if self.iter % 100 == 0:
+                if self.iter % 10000 == 0:
                     save_directory = os.path.join(save_path, 'training')
                     os.makedirs(save_directory, exist_ok=True)
 
