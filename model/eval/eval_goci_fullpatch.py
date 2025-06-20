@@ -80,13 +80,13 @@ class GOCITileDataset(Dataset):
 if __name__ == '__main__':
     model = RFRNetModel()
     model.initialize_model(
-        path='/home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/g_1000000.pth',
+        path='/home/juneyonglee/MyData/5th_years/GOCI_RRS_band3_1day/g_1000000.pth',
         train=False, gpu_ids=[0,1]
     )
     model.cuda()
 
-    year_folder   = '/media/juneyonglee/My Book/Preprocessed/GOCI_tiles_daily/band2/2021'
-    base_result   = '/media/juneyonglee/My Book/results/band2'
+    year_folder   = '/media/juneyonglee/My Book/Preprocessed/GOCI_tiles_daily/band3/2021'
+    base_result   = '/home/juneyonglee/myhdd/results/band3'
     year          = os.path.basename(year_folder)
 
     for date in sorted(os.listdir(year_folder)):

@@ -2,7 +2,7 @@ project_name: RFR
 exp_name: CHL_only_range2
 notes: 0~20 in range, else outlier
 
-data_path: /media/juneyonglee/My Book/results/50
+data_path: /media/juneyonglee/My Book1/results/2020/20201201
 # data_path: /home/juneyonglee/Documents/results/10
 
 # data_path: model/results/GOCI_chl/550000/10

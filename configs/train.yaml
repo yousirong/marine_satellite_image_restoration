@@ -27,15 +27,15 @@
 
 # # GOCI
 project_name: RRS
-exp_name: GOCI_RRS_band3_1day
+exp_name: GOCI_RRS_band4_1day
 notes: RRS
 
-data_root: /media/juneyonglee/My Book/Preprocessed/GOCI_RRS/band3/train
-mask_root: /media/juneyonglee/My Book/Preprocessed/GOCI_RRS/mask/band3/train
-model_save_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band3_1day/
+data_root: /media/juneyonglee/My Book/Preprocessed/GOCI_RRS/band4/train
+mask_root: /media/juneyonglee/My Book/Preprocessed/GOCI_RRS/mask/band4/train
+model_save_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band4_1day/
 # model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band3_1day/g_10000.pth
-model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band3_1day/
-# land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI.npy
+model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band4_1day/g_20000.pth
+# land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999_flipped.npy
 land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy
 
 # Training parameters
@@ -50,4 +50,4 @@ save_capacity: 5
 num_workers: 32
 warmup_batches: 1500
 
-# python model/run.py --c configs/train.yaml
+# python -m model.run --c configs/train.yaml

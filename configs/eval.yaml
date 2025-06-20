@@ -15,14 +15,14 @@
 # warmup_batchs: 1500
 
 batch_size: 32
-data_root: /media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/band2/test
+data_root: /media/juneyonglee/My Book/Preprocessed/GOCI_RRS/band3/test
 gpu_ids: [0, 1]
 land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy
 mask_mode: 2
-mask_root: /media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/mask/band2/test/50
-result_save_path_default: /media/juneyonglee/My Book1/results/band2/50
+mask_root: /media/juneyonglee/My Book/Preprocessed/GOCI_RRS/mask/band3/test/50
+result_save_path_default: /home/juneyonglee/myhdd/GOCI_RRS/band3/test/50
 max_epochs: null
-model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/g_10000.pth
+model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band3_1day/g_1000000.pth
 model_save_path: null
 n_threads: 6
 num_iters: 1000000
@@ -30,4 +30,7 @@ num_workers: 16
 target_size: 256
 warmup_batchs: 1500
 
-## python model/run.py --c configs/eval.yaml --test
+# python -m model.run --c configs/eval.yaml --test
+# python /home/juneyonglee/Desktop/AY_ust/preprocessing/preprocess_goci_1day_fullpatch.py --bands 3 --workers 32
+# python model/eval/eval_goci_fullpatch.py
+# python performance/val_goci_fullpatch.py

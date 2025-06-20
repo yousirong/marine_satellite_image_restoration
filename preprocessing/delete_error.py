@@ -1,48 +1,74 @@
+#!/usr/bin/env python3
 import os
 import cv2
 import numpy as np
 
-def delete_black_masks(root_dir):
-    """
-    root_dir 아래 모든 서브폴더를 순회하면서,
-    256x256 크기의 png 이미지를 검사해,
-    1) 완전히 0(검정)인 경우
-    2) 0 픽셀이 전체의 1% 미만인 경우(즉 거의 전부 255인 경우)
-    를 찾아 삭제한다.
-    """
+def is_invalid_data(arr):
+    """모든 값이 NaN/Inf인 경우 True"""
+    return not np.isfinite(arr).any()
 
-    total_pixels = 256 * 256  # 65536
-    threshold = int(total_pixels * 0.01)  # 655.36 -> 655
+def is_invalid_mask(mask):
+    """1) 전부 0 or 2) 0 픽셀이 전체의 1% 미만이면 True"""
+    if mask.shape != (256, 256):
+        return False  # 크기 불일치시 판단하지 않음
 
-    for root, dirs, files in os.walk(root_dir):
-        for filename in files:
-            if filename.lower().endswith('.png'):
-                file_path = os.path.join(root, filename)
+    total_pixels = 256 * 256
+    threshold = int(total_pixels * 0.01)
+    zero_count = np.count_nonzero(mask == 0)
 
-                # 이미지 로드 (흑백)
-                img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
-                if img is None:
-                    continue
+    if zero_count == total_pixels:
+        return True  # 전부 0
+    if zero_count < threshold:
+        return True  # 거의 255
 
-                if img.shape != (256, 256):
-                    # 크기가 다른 경우는 여기서는 스킵(또는 필요시 삭제)
-                    continue
+    return False
 
-                # 0(검정) 픽셀 카운트
-                zero_count = np.count_nonzero(img == 0)
+def clean_dataset_recursive(data_root, mask_root):
+    deleted = 0
+    valid_exts = ('.png', '.tif', '.tiff', '.npy', '.jpg')
 
-                # 1) 전부 0인가?
-                if zero_count == total_pixels:
-                    os.remove(file_path)
-                    print(f"[DELETE] All-zero mask: {file_path}")
-                    continue  # 다음 파일로
+    for dirpath, _, filenames in os.walk(data_root):
+        for fname in filenames:
+            if not fname.lower().endswith(valid_exts):
+                continue
 
-                # 2) 0 픽셀이 1% 미만인가?
-                if zero_count < threshold:
-                    os.remove(file_path)
-                    print(f"[DELETE] Zero-pixel < 1%: {file_path}")
-                    continue
+            data_path = os.path.join(dirpath, fname)
+            # data_root를 기준으로 한 상대경로
+            rel_path = os.path.relpath(data_path, data_root)
+            mask_path = os.path.join(mask_root, rel_path)
+
+            # mask 파일이 없으면 건너뛰기
+            if not os.path.exists(mask_path):
+                print(f"[SKIP] mask not found: {rel_path}")
+                continue
+
+            # 로드
+            try:
+                if fname.lower().endswith(".npy"):
+                    data = np.load(data_path)
+                    mask = np.load(mask_path)
+                else:
+                    data = cv2.imread(data_path, cv2.IMREAD_UNCHANGED)
+                    mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                if data is None or mask is None:
+                    raise ValueError("read returned None")
+            except Exception as e:
+                print(f"[ERROR] Load failed ({rel_path}): {e}")
+                continue
+
+            # 삭제 조건 검사
+            if is_invalid_data(data) or is_invalid_data(mask) or is_invalid_mask(mask):
+                try:
+                    os.remove(data_path)
+                    os.remove(mask_path)
+                    print(f"[DELETE] {rel_path}")
+                    deleted += 1
+                except Exception as e:
+                    print(f"[ERROR] Delete failed ({rel_path}): {e}")
+
+    print(f"총 삭제된 파일 쌍: {deleted}")
 
 if __name__ == "__main__":
-    root_directory = "/media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/mask"
-    delete_black_masks(root_directory)
+    data_root = "/media/juneyonglee/My Book/Preprocessed/GOCI_RRS/band4/train"
+    mask_root = "/media/juneyonglee/My Book/Preprocessed/GOCI_RRS/mask/band4/train"
+    clean_dataset_recursive(data_root, mask_root)

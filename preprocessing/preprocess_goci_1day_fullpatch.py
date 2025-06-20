@@ -15,8 +15,8 @@ import multiprocessing as mp
 import argparse
 
 # -------- 경로 및 기본 설정 --------
-DATA_BASE    = '/media/juneyonglee/My Book1/GOCI/L2_Rrs/2021'
-SAVE_BASE    = '/media/juneyonglee/My Book1/Preprocessed/GOCI_tiles_daily'
+DATA_BASE    = '/media/juneyonglee/My Book/GOCI/L2_Rrs/2021'
+SAVE_BASE    = '/media/juneyonglee/My Book/Preprocessed/GOCI_tiles_daily'
 MASK_PATH    = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
 PATCH_SIZE   = 256
 HDF_BASE_PATH = 'HDFEOS/GRIDS/Image Data/Data Fields'  # 밴드별 데이터 그룹
@@ -137,5 +137,5 @@ def main():
 if __name__ == '__main__':
     main()
 
-# python /home/juneyonglee/Desktop/AY_ust/preprocessing/preprocess_goci_1day_fullpatch.py --bands 2 --workers 32
+# python /home/juneyonglee/Desktop/AY_ust/preprocessing/preprocess_goci_1day_fullpatch.py --bands 4 --workers 32
 # /home/juneyonglee/Desktop/AY_ust/preprocessing/preprocess_goci_1day_fullpatch.py ->

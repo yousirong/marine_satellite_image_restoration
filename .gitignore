@@ -10,7 +10,7 @@ preprocessing/LAT_LON
 preprocessing/Land_mask
 preprocessing/is_land_on_GOCI.npy
 preprocessing/is_land_on_GOCI_modified_1_999.npy
-
+preprocessing/is_land_on_GOCI_modified_1_999_flipped.npy
 # Notebook
 Notebook/output
 

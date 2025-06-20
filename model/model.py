@@ -35,10 +35,12 @@ class RFRNetModel():
         self.real_B = gt_image
         self.mask = mask
         fake_B, _ = self.G(masked_image, mask)
-        self.fake_B = fake_B
-        self.comp_B = self.fake_B * (1 - mask) + self.real_B * mask
-        # 복원(=fake_B) 할 영역이 mask==1(검은색)이 되도록 연산 순서를 뒤집습니다
-        # self.comp_B = self.fake_B * mask + self.real_B * (1 - mask)
+        # self.fake_B = fake_B
+        self.fake_B = torch.nan_to_num(fake_B, nan=0.0, posinf=1e3, neginf=-1e3)
+
+        # self.comp_B = self.fake_B * (1 - mask) + self.real_B * mask
+        comp = self.fake_B * (1 - mask) + self.real_B * mask
+        self.comp_B = torch.nan_to_num(comp, nan=0.0, posinf=1e3, neginf=-1e3)
         return masked_image, self.fake_B, self.comp_B
 
 
@@ -66,6 +68,7 @@ class RFRNetModel():
         except:
             print('No trained model, from start')
             self.iter = 0
+
 
     def cuda(self):
         if torch.cuda.is_available():
@@ -101,7 +104,6 @@ class RFRNetModel():
         save_image(grid, save_path)
         print(f"Image grid saved at {save_path}")
 
-
     def train(self, train_loader, save_path, store_capacity=10, finetune=False, iters=800000):
         count = 0
         self.G.train()
@@ -111,6 +113,7 @@ class RFRNetModel():
             for param in self.G.module.fc.parameters():  # assuming `fc` is the part you want to finetune
                 param.requires_grad = True
             self.optm_G = optim.Adam(filter(lambda p: p.requires_grad, self.G.parameters()), lr=5e-5)
+
         print("Starting training from iteration:{:d}".format(self.iter))
         s_time = time.time()
 
@@ -135,14 +138,15 @@ class RFRNetModel():
                 # Forward pass
                 masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_images)
                 if torch.isnan(fake_B).any():
-                    raise RuntimeError("NaN in network output (fake_B)!")
+                    print("Warning: NaN in network output (fake_B)!")
+
                 if torch.isnan(comp_B).any():
-                    raise RuntimeError("NaN in composited output (comp_B)!")
+                    print("Warning: NaN in composited output (comp_B)!")
                 # Update parameters
                 self.update_parameters()
                 self.iter += 1
 
-                if self.iter % 1000 == 0:
+                if self.iter % 100 == 0:
                     e_time = time.time()
                     int_time = e_time - s_time
                     print("Iteration:%d, l1_loss:%.4f, time_taken:%.2f" % (self.iter, self.l1_loss_val / 50, int_time))
@@ -309,7 +313,12 @@ class RFRNetModel():
         self.optm_G.zero_grad()
         loss_G = self.get_g_loss()
         loss_G.backward()
+
+        # Gradient clipping 추가 (클립 임계값: 1.0)
+        torch.nn.utils.clip_grad_norm_(self.G.parameters(), max_norm=1.0)
+
         self.optm_G.step()
+
 
     def update_D(self):
         return
@@ -377,6 +386,7 @@ class RFRNetModel():
 
     def l1_loss(self, f1, f2, mask=1):
         return torch.mean(torch.abs(f1 - f2) * mask)
+
 
     def style_loss(self, A_feats, B_feats):
         assert len(A_feats) == len(B_feats), "the length of two input feature maps lists should be the same"
