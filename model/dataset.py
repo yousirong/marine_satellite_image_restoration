@@ -16,85 +16,247 @@ class Dataset(torch.utils.data.Dataset):
         self.mask_type = mask_mode
         self.mask_reverse = mask_reverse
 
-        # Load all images from subdirectories
-        self.data = self.load_list(image_path)
-        print(f"Total training samples: {len(self.data)}")
+        # 실제 데이터 분포에 맞춘 전처리 파라미터
+        self.missing_value = -999
+        self.valid_min = -1000      # 유효한 데이터 최소값
+        self.valid_max = 1000       # 유효한 데이터 최대값
+        self.min_valid_ratio = 0.05 # 최소 5% 유효 픽셀 (더 관대하게)
 
-        # Load all mask files
+        # Load data
+        self.data = self.load_list(image_path)
         self.mask_data = self.load_list(mask_path)
+        self.land_sea_mask = self.load_land_sea_mask(land_sea_mask_path)
+
+        print(f"Total training samples: {len(self.data)}")
         print(f"Total masks: {len(self.mask_data)}")
+
         if len(self.mask_data) == 0:
             print(f"Warning: No mask files found in the directory: {mask_path}")
 
-        # Load the land-sea mask (assuming this is a .npy file)
-        self.land_sea_mask = self.load_land_sea_mask(land_sea_mask_path)
+        # 데이터 품질 검사
+        if self.training:
+            self.validate_dataset_quality()
+
+    def validate_dataset_quality(self):
+        """
+        데이터셋 품질 검사
+        """
+        print("=== Dataset Quality Check ===")
+        valid_samples = 0
+        total_checked = min(100, len(self.data))  # 처음 100개 샘플 검사
+
+        for i in range(total_checked):
+            img = cv2.imread(self.data[i], cv2.IMREAD_UNCHANGED)
+            if img is not None:
+                img = img.astype(np.float32)
+
+                # 유효한 픽셀 비율 계산
+                valid_pixels = np.sum((img != self.missing_value) &
+                                    (img >= self.valid_min) &
+                                    (img <= self.valid_max) &
+                                    (~np.isnan(img)))
+                total_pixels = img.size
+                valid_ratio = valid_pixels / total_pixels
+
+                if valid_ratio >= self.min_valid_ratio:
+                    valid_samples += 1
+
+        print(f"Valid samples: {valid_samples}/{total_checked} ({valid_samples/total_checked*100:.1f}%)")
+        if valid_samples < total_checked * 0.5:
+            print("⚠️  Warning: Low quality dataset detected!")
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
         img, mask = self.load_item(index, test_mode=not self.training)
+
         if img is None or mask is None:
             return self.__getitem__((index + 1) % len(self.data))
 
-        # ====================================================================
-        if np.isnan(img).any() or np.isinf(img).any() \
-        or np.isnan(mask).any() or np.isinf(mask).any():
-            print(f"[Dataset] NaN or inf detected — skipping: {self.data[index]}")
-            return self.__getitem__((index + 1) % len(self.data))
-        # ====================================================================
+        # 최종 데이터 품질 검사 (더 관대한 기준)
+        if (np.isnan(img).any() or np.isinf(img).any() or
+            np.isnan(mask).any() or np.isinf(mask).any()):
+            if self.training:
+                print(f"  NaN/Inf detected, trying next sample...")
+                return self.__getitem__((index + 1) % len(self.data))
+            else:
+                # 테스트 시에는 더 강력하게 정리
+                img = np.nan_to_num(img, nan=0.0, posinf=100.0, neginf=-900.0)
+                mask = np.nan_to_num(mask, nan=1.0).astype(np.uint8)
+                print(f"  Cleaned NaN/Inf for test sample")
 
         filename = os.path.basename(self.data[index])
         img_tensor = self.to_tensor(img)
         mask_tensor = torch.from_numpy(mask.astype(np.float32))
+
         return img_tensor, mask_tensor, filename
 
-
     def load_item(self, index, test_mode=False):
-        max_attempts = 10
+        """
+        실제 데이터 분포에 맞춘 아이템 로딩
+        """
+        max_attempts = 15 if self.training else 3
+
         for attempt in range(max_attempts):
-            img = cv2.imread(self.data[index], cv2.IMREAD_UNCHANGED)
-            if img is None:
+            try:
+                current_index = (index + attempt) % len(self.data)
+                img = cv2.imread(self.data[current_index], cv2.IMREAD_UNCHANGED)
+
+                if img is None:
+                    continue
+
+                # 채널 정규화
+                if img.ndim == 2:
+                    img = np.stack([img]*3, axis=2)
+                elif img.shape[2] == 1:
+                    img = np.concatenate([img]*3, axis=2)
+                elif img.shape[2] == 4:
+                    img = img[:, :, :3]
+                elif img.shape[2] != 3:
+                    continue
+
+                img = img.astype(np.float32)
+
+                # ===== 실제 데이터 분포 분석 및 전처리 =====
+
+                # 1. 극값 제거 (매우 비정상적인 값들)
+                extreme_mask = (img < -2000) | (img > 2000)
+                img[extreme_mask] = self.missing_value  # 극값을 결측값으로 변환
+
+                # 2. 유효한 픽셀 비율 확인 (-999가 아닌 픽셀들)
+                valid_pixels = np.sum(img != self.missing_value)
+                total_pixels = img.size
+                valid_ratio = valid_pixels / total_pixels
+
+                # if self.training and attempt == 0:  # 첫 번째 시도에서만 출력
+                #     print(f"Sample {current_index}: valid ratio = {valid_ratio:.3f}")
+
+                if valid_ratio < self.min_valid_ratio:
+                    if self.training:
+                        if attempt == 0:
+                            print(f"  Skipping due to low valid ratio: {valid_ratio:.3f}")
+                        continue
+                    else:
+                        if attempt == 0:
+                            print(f"  Low valid ratio but processing for test: {valid_ratio:.3f}")
+
+                # 3. 결측값 처리 (훈련용과 테스트용 다르게)
+                if self.training:
+                    # 훈련 시: 채널별 적응적 채우기
+                    img = self.adaptive_fill_missing(img)
+                else:
+                    # 테스트 시: 간단한 보간
+                    img = self.simple_fill_missing(img)
+
+                # 4. 크기 조정
+                if img.shape[0] != self.target_size or img.shape[1] != self.target_size:
+                    img = cv2.resize(img, (self.target_size, self.target_size))
+
+                # 5. 채널 순서 변경
+                img = np.transpose(img, (2, 0, 1))
+
+                # 6. 마스크 생성
+                mask = self.load_mask(img, current_index)
+                land_sea_mask_patch = self.get_land_sea_mask_patch(img, current_index, self.land_sea_mask)
+
+                if land_sea_mask_patch.shape[1:] != (self.target_size, self.target_size):
+                    land_sea_mask_patch = cv2.resize(
+                        land_sea_mask_patch.transpose(1, 2, 0),
+                        (self.target_size, self.target_size)
+                    )
+                    land_sea_mask_patch = np.transpose(land_sea_mask_patch, (2, 0, 1))
+
+                land_removed_mask = self.remove_land_from_mask(mask, land_sea_mask_patch)
+
+                # 7. 해양 영역 검증
+                sea_mask = (land_sea_mask_patch == 0).astype(np.uint8)
+                total_ocean = sea_mask.sum()
+
+                if total_ocean == 0:
+                    continue
+
+                ocean_holes = (land_removed_mask == 1) & (sea_mask == 1)
+                ocean_hole_ratio = ocean_holes.sum() / total_ocean
+
+                if ocean_hole_ratio >= 0.005:  # 0.5% 이상 (더 관대하게)
+                    # if self.training and attempt == 0:
+                    #     print(f"  Success: ocean hole ratio = {ocean_hole_ratio:.3f}")
+                    return img, land_removed_mask
+                else:
+                    if self.training and attempt == 0:
+                        print(f"  Low ocean hole ratio: {ocean_hole_ratio:.3f}")
+
+            except Exception as e:
+                if self.training and attempt == 0:
+                    print(f"Error loading sample {current_index}: {e}")
                 continue
 
-            if img.ndim == 2:
-                img = np.stack([img]*3, axis=2)
-            elif img.shape[2] == 1:
-                img = np.concatenate([img]*3, axis=2)
-            elif img.shape[2] == 4:
-                img = img[:, :, :3]
-            elif img.shape[2] != 3:
-                continue
+        if self.training:
+            print(f"Failed to load valid sample after {max_attempts} attempts")
+        return self.create_dummy_sample()
 
-            img = img.astype(np.float32)
-            img[img == -999] = np.nan
-            img = np.nan_to_num(img, 0.0)
+    def adaptive_fill_missing(self, img):
+        """
+        적응적 결측값 채우기 (훈련용)
+        """
+        for c in range(img.shape[2]):
+            channel = img[:, :, c]
+            missing_mask = (channel == self.missing_value)
 
-            if img.shape[0] != self.target_size or img.shape[1] != self.target_size:
-                img = cv2.resize(img, (self.target_size, self.target_size))
-            img = np.transpose(img, (2, 0, 1))
+            if missing_mask.sum() > 0:
+                valid_values = channel[~missing_mask]
 
-            mask = self.load_mask(img, index)
-            land_sea_mask_patch = self.get_land_sea_mask_patch(img, index, self.land_sea_mask)
-            if land_sea_mask_patch.shape[1:] != (self.target_size, self.target_size):
-                land_sea_mask_patch = cv2.resize(
-                    land_sea_mask_patch.transpose(1, 2, 0),
-                    (self.target_size, self.target_size)
-                )
-                land_sea_mask_patch = np.transpose(land_sea_mask_patch, (2, 0, 1))
+                if len(valid_values) > 0:
+                    # 유효한 값들의 분포 분석
+                    unique_values = np.unique(valid_values)
 
-            land_removed_mask = self.remove_land_from_mask(mask, land_sea_mask_patch)
+                    if len(unique_values) >= 5:
+                        # 분포가 다양하면 percentile 기반 채우기
+                        p25 = np.percentile(valid_values, 25)
+                        p75 = np.percentile(valid_values, 75)
 
-            sea_mask = (land_sea_mask_patch == 0).astype(np.uint8)
-            total_ocean = sea_mask.sum()
-            if total_ocean == 0:
-                continue
+                        # 25-75 percentile 범위에서 랜덤 채우기
+                        fill_values = np.random.uniform(p25, p75, missing_mask.sum())
+                        channel[missing_mask] = fill_values
+                    else:
+                        # 값의 종류가 적으면 가장 빈번한 값으로 채우기
+                        unique_vals, counts = np.unique(valid_values, return_counts=True)
+                        most_frequent = unique_vals[np.argmax(counts)]
+                        channel[missing_mask] = most_frequent
+                else:
+                    # 유효한 값이 없으면 0으로
+                    channel[missing_mask] = 0.0
 
-            ocean_holes = (land_removed_mask == 1) & (sea_mask == 1)
-            if ocean_holes.sum() / total_ocean >= 0.01:
-                return img, land_removed_mask
+        return img
 
-        return img, land_removed_mask
+    def simple_fill_missing(self, img):
+        """
+        간단한 결측값 채우기 (테스트용)
+        """
+        for c in range(img.shape[2]):
+            channel = img[:, :, c]
+            missing_mask = (channel == self.missing_value)
+
+            if missing_mask.sum() > 0:
+                valid_values = channel[~missing_mask]
+
+                if len(valid_values) > 0:
+                    # median으로 채우기
+                    median_val = np.median(valid_values)
+                    channel[missing_mask] = median_val
+                else:
+                    channel[missing_mask] = 0.0
+
+        return img
+
+    def create_dummy_sample(self):
+        """
+        로딩 실패 시 더미 샘플 생성
+        """
+        dummy_img = np.zeros((3, self.target_size, self.target_size), dtype=np.float32)
+        dummy_mask = np.ones((3, self.target_size, self.target_size), dtype=np.uint8)
+        return dummy_img, dummy_mask
 
     def load_mask(self, img, index):
         imgh, imgw = img.shape[1:]
@@ -140,7 +302,6 @@ class Dataset(torch.utils.data.Dataset):
 
         # 4) 3채널로 확장
         return np.repeat(final[np.newaxis, :, :], 3, axis=0)
-
 
     def extract_row_col(self, filename):
         m = re.search(r'r(\d+)_c(\d+)', filename)

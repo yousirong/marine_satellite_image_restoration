@@ -2,22 +2,20 @@ project_name: RFR
 exp_name: CHL_only_range2
 notes: 0~20 in range, else outlier
 
-data_path: /media/juneyonglee/My Book1/results/2020/20201201
-# data_path: /home/juneyonglee/Documents/results/10
+# UST21
+# data_path: "/media/juneyonglee/My Book1/results/2020"
+# GOCI
+data_path: /home/juneyonglee/myhdd/GOCI_RRS/test/band2/20
 
-# data_path: model/results/GOCI_chl/550000/10
-
-# data_path: /home/juneyonglee/MyData/backup_20240914/AY_UST/results/ust21_chl_8day_perfect/600000/50
-# data_path: model/results/ust21_chl_8day_10/600000/20
-# data_path: model/results/ust21_chl_8day_20/600000/30
-# data_path: model/results/ust21_chl_8day_30/600000/40
-# data_path: model/results/ust21_chl_8day_40/600000/50
-
+# UST21
 # land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
-land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
+# GOCI
+land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy
 
-# save_path: model/performance/ust21_chl_color
-save_path: /media/juneyonglee/My Book/performence/UST21
-sample_size: 5000
+# save_path: /home/juneyonglee/myhdd/UST21/performance
+save_path: /home/juneyonglee/myhdd/GOCI_RRS/performance/band2/test/20
+sample_size: 10000
 gpu_ids: [0, 1]
-# python model/run.py --c configs/val.yaml --val
+# python -m model.run --c configs/val.yaml --val
+
+

@@ -1,10 +1,10 @@
 # batch_size: 32
-# data_root: /media/juneyonglee/My Book/Preprocessed/UST21/test
+# data_root: /media/juneyonglee/My Book1/Preprocessed/UST21/test
 # gpu_ids: [0, 1]
 # land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
 # mask_mode: 2
-# mask_root: /media/juneyonglee/My Book/Preprocessed/UST21/mask/test/50
-# result_save_path_default: /media/juneyonglee/My Book/results/50
+# mask_root: /media/juneyonglee/My Book1/Preprocessed/UST21/mask/test/10
+# result_save_path_default: /media/juneyonglee/My Book1/results/10
 # max_epochs: null
 # model_path: /home/juneyonglee/MyData/5th_years/ust21_chl_8day/g_1000000.pth
 # model_save_path: null
@@ -13,24 +13,27 @@
 # num_workers: 16
 # target_size: 256
 # warmup_batchs: 1500
+# sample_size: 10000
 
 batch_size: 32
-data_root: /media/juneyonglee/My Book/Preprocessed/GOCI_RRS/band3/test
+data_root: /media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/band3/test
 gpu_ids: [0, 1]
 land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy
 mask_mode: 2
-mask_root: /media/juneyonglee/My Book/Preprocessed/GOCI_RRS/mask/band3/test/50
-result_save_path_default: /home/juneyonglee/myhdd/GOCI_RRS/band3/test/50
+mask_root: /media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/mask/band3/test/50
+result_save_path_default: /home/juneyonglee/myhdd/GOCI_RRS/test/band3/50
 max_epochs: null
-model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band3_1day/g_1000000.pth
+model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band3_1day/best_model/g_1000000.pth
 model_save_path: null
 n_threads: 6
 num_iters: 1000000
 num_workers: 16
 target_size: 256
 warmup_batchs: 1500
+sample_size: 10000
+
 
 # python -m model.run --c configs/eval.yaml --test
 # python /home/juneyonglee/Desktop/AY_ust/preprocessing/preprocess_goci_1day_fullpatch.py --bands 3 --workers 32
-# python model/eval/eval_goci_fullpatch.py
-# python performance/val_goci_fullpatch.py
+
+# model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/best_model/g_931000.pth
