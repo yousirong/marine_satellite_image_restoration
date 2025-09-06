@@ -90,7 +90,7 @@ def process_single_file_memory_efficient(args):
         gt_np = np.loadtxt(gt_file, delimiter=',', dtype='float32')
 
         # 좌표 추출
-        match = re.search(r'r(\d+)_c(\d+)', recon_file_name)
+        match = re.search(r'y(\d+)_x(\d+)', recon_file_name)
         if not match:
             return None
         row, col = int(match.group(1)), int(match.group(2))
@@ -373,6 +373,7 @@ def process_files_in_batches(file_args, land_sea_mask_path, n_processes=4, batch
         'nan_inf': 0,
         'extreme_values': 0
     }
+    files_with_masked_pixels = 0
 
     print(f"Processing {len(file_args)} files in batches of {batch_size}")
 
@@ -389,6 +390,8 @@ def process_files_in_batches(file_args, land_sea_mask_path, n_processes=4, batch
                 for future in as_completed(future_to_file):
                     result = future.result()
                     if result is not None:
+                        if result['stats']['masked_pixels'] > 0:
+                            files_with_masked_pixels += 1
                         for key in total_stats:
                             total_stats[key] += result['stats'][key]
                     pbar.update(1)
@@ -399,7 +402,7 @@ def process_files_in_batches(file_args, land_sea_mask_path, n_processes=4, batch
             current_memory = get_memory_usage()
             print(f"Batch {i//batch_size + 1} completed. Memory usage: {current_memory:.1f} GB")
 
-    return total_stats
+    return total_stats, files_with_masked_pixels
 
 def process_sample_for_plotting(file_args, land_sea_mask_path, sample_ratio=0.1, n_processes=4):
     """
@@ -586,22 +589,52 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path=None,
     print(f"Initial memory usage: {get_memory_usage():.1f} GB")
 
     # 경로 설정
-    recon_path = os.path.join(data_path, 'recon')
-    gt_path = os.path.join(data_path, 'gt')
-    mask_path = os.path.join(data_path, 'mask')
+    # The user specified a nested structure: data_path/{timestamp}/degree/{recon,gt,mask}
+    # The data_path from the log is .../20210101/degree, which is incorrect.
+    # The actual base path is one level up.
+    base_data_path = os.path.dirname(data_path)
 
-    # 경로 확인
-    for path_name, path in [("recon", recon_path), ("gt", gt_path), ("mask", mask_path)]:
-        if not os.path.isdir(path):
-            print(f"❌ Missing directory: {path_name}")
-            return
+    recon_files = []
+    gt_files = []
+    mask_files = []
+
+    # Find numeric timestamp directories like '001641', '071640', etc.
+    try:
+        timestamp_dirs = sorted([d for d in os.listdir(base_data_path) if os.path.isdir(os.path.join(base_data_path, d)) and d.isdigit()])
+    except FileNotFoundError:
+        print(f"❌ Data directory not found: {base_data_path}")
+        return
+
+    if not timestamp_dirs:
+        print(f"❌ No timestamp directories found in {base_data_path}. Expected directories like '001641', etc.")
+        # Also check the original path for the 'recon' directory for a better error message.
+        recon_path_orig = os.path.join(data_path, 'recon')
+        if not os.path.isdir(recon_path_orig):
+            print(f"❌ Also, the 'recon' directory is missing at the fallback path: {recon_path_orig}")
+        return
+
+    print(f"Found {len(timestamp_dirs)} timestamp directories in {base_data_path}. Searching for data...")
+    for ts_dir in timestamp_dirs:
+        degree_path = os.path.join(base_data_path, ts_dir, 'degree')
+        
+        recon_path = os.path.join(degree_path, 'recon')
+        gt_path = os.path.join(degree_path, 'gt')
+        mask_path = os.path.join(degree_path, 'mask')
+
+        # Check that all three directories exist before adding files
+        if os.path.isdir(recon_path) and os.path.isdir(gt_path) and os.path.isdir(mask_path):
+            recon_files.extend(glob.glob(os.path.join(recon_path, '*.csv')))
+            gt_files.extend(glob.glob(os.path.join(gt_path, '*.csv')))
+            mask_files.extend(glob.glob(os.path.join(mask_path, '*.csv')))
+        else:
+            print(f"⚠️ Skipping {ts_dir}: one or more of recon/gt/mask directories are missing in {degree_path}")
+
+    # Sort all collected files
+    recon_files = sorted(recon_files, key=natural_sort_key)
+    gt_files = sorted(gt_files, key=natural_sort_key)
+    mask_files = sorted(mask_files, key=natural_sort_key)
 
     os.makedirs(save_path, exist_ok=True)
-
-    # 파일 리스트
-    recon_files = sorted(glob.glob(os.path.join(recon_path, '*.csv')), key=natural_sort_key)
-    gt_files = sorted(glob.glob(os.path.join(gt_path, '*.csv')), key=natural_sort_key)
-    mask_files = sorted(glob.glob(os.path.join(mask_path, '*.csv')), key=natural_sort_key)
 
     if len(recon_files) == 0:
         print("❌ No CSV files found")
@@ -623,7 +656,7 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path=None,
     print(f"\n=== Step 1: Collecting Statistics ===")
     start_time = time.time()
 
-    total_stats = process_files_in_batches(
+    total_stats, files_with_masked_pixels = process_files_in_batches(
         file_args, land_sea_mask_path, n_processes, batch_size=1000
     )
 
@@ -633,6 +666,7 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path=None,
     # 통계 출력
     print(f"\n=== Detailed Processing Statistics ===")
     total = total_stats['total_pixels']
+    print(f"Files with at least one masked pixel: {files_with_masked_pixels}/{len(file_args)}")
     for key, val in total_stats.items():
         pct = val/total*100 if total > 0 else 0
         print(f"{key}: {val:,} ({pct:.1f}%)")

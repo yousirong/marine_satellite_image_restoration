@@ -2,9 +2,6 @@
 logs
 
 # model result
-models
-performance
-results
 training
 preprocessing/LAT_LON
 preprocessing/Land_mask

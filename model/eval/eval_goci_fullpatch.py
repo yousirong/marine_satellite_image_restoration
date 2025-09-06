@@ -85,8 +85,8 @@ if __name__ == '__main__':
     )
     model.cuda()
 
-    year_folder   = '/media/juneyonglee/My Book/Preprocessed/GOCI_tiles_daily/band3/2021'
-    base_result   = '/home/juneyonglee/myhdd/results/band3'
+    year_folder   = '/media/juneyonglee/My Book1/Preprocessed/GOCI_tiles_daily/band3/2021'
+    base_result   = '/home/juneyonglee/myhdd/GOCI_RRS/results/band3'
     year          = os.path.basename(year_folder)
 
     for date in sorted(os.listdir(year_folder)):

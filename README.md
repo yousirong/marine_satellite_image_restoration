@@ -67,3 +67,10 @@ Rrs연구 복원, Chl-a 복원
 
 
 
+```bash
+python -m model.run --c configs/train.yaml
+python /home/juneyonglee/Desktop/AY_ust/model/eval/eval_goci_fullpatch.py
+
+python -m model.run --c configs/val.yaml --val
+python /home/juneyonglee/Desktop/AY_ust/performance/val_goci_fullpatch.py
+```

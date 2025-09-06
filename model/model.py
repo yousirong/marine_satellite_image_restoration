@@ -502,6 +502,12 @@ class RFRNetModel():
                         # forward pass
                         masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_normalized)
 
+                        # Clamp the output to be within [0, 1] range
+                        fake_B = torch.clamp(fake_B, 0, 1)
+
+                        # DEBUG: Raw model output
+                        print(f"  - DEBUG: Raw model output (normalized space) min: {torch.min(fake_B):.4f}, max: {torch.max(fake_B):.4f}")
+
                         # 정규화된 결과를 원본 스케일로 복원
                         fake_B_original = self.denormalize_to_original(fake_B, data_min, data_max)
                         comp_B_original = self.denormalize_to_original(comp_B, data_min, data_max)

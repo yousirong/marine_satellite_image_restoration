@@ -143,6 +143,10 @@ class RFRNet(nn.Module):
         self.out = nn.Conv2d(64,3,3,1,1, bias = False)
 
     def forward(self, in_image, mask):
+        # Force input to float32 to prevent numerical instability with mixed precision
+        in_image = in_image.to(torch.float32)
+        mask = mask.to(torch.float32)
+
         x1, m1 = self.Pconv1(in_image, mask)
         x1 = F.relu(self.bn1(x1), inplace = True)
         x1, m1 = self.Pconv2(x1, m1)
