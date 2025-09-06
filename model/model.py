@@ -502,9 +502,6 @@ class RFRNetModel():
                         # forward pass
                         masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_normalized)
 
-                        # Clamp the output to be within [0, 1] range
-                        fake_B = torch.clamp(fake_B, 0, 1)
-
                         # DEBUG: Raw model output
                         print(f"  - DEBUG: Raw model output (normalized space) min: {torch.min(fake_B):.4f}, max: {torch.max(fake_B):.4f}")
 

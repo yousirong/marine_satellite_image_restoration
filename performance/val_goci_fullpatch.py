@@ -13,8 +13,8 @@ from matplotlib.colors import Normalize
 DATE_LIST = ['20210101', '20210108', '20210115', '20210122', '20210129'] 
 
 # 기본 경로 설정
-BASE_RESULTS_DIR = '/home/juneyonglee/myhdd/GOCI_RRS/results/band3/2021'
-BASE_PERFORMANCE_DIR = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band3/2021'
+BASE_RESULTS_DIR = '/home/juneyonglee/myhdd/GOCI_RRS/results/band2/2021'
+BASE_PERFORMANCE_DIR = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band2/2021'
 
 # 고정 설정
 LAND_MASK_NPY = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
