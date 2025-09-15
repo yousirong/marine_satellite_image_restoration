@@ -123,20 +123,23 @@ class Dataset(torch.utils.data.Dataset):
 
     def remove_land_from_mask(self, mask_image, land_sea_mask_patch):
         """
+        해양 영역에서만 결측치 마스크를 생성하는 함수
         mask_image: np.array [3,H,W], 1=hole,0=valid
         land_sea_mask_patch: np.array [3,H,W], 1=sea,0=land
 
-        반환: np.array [3,H,W],  land(흰색=1), sea-hole(검은색=0), sea-valid(흰색=1)
+        반환: np.array [3,H,W], 해양 영역의 결측치만 0(검은색)으로 표시, 나머지는 1(흰색)
         """
         # 1) 1채널로 축소
         sea = land_sea_mask_patch[0]    # 1=sea, 0=land
         hole = mask_image[0]            # 1=hole, 0=valid
 
-        # 2) 기본값을 1(흰색)으로 세팅
+        # 2) 기본값을 1(흰색)으로 세팅 - 모든 영역을 유효값으로 초기화
         final = np.ones_like(hole, dtype=np.uint8)
 
-        # 3) 바다 영역의 hole만 0(검은색)으로 변경
-        final[(sea == 0) & (hole == 1)] = 0
+        # 3) 해양 영역(sea==1)의 결측치(hole==1)만 0(검은색)으로 변경
+        # 육지 영역의 결측치는 무시하고 해양 영역의 결측치만 복원 대상으로 설정
+        ocean_holes = (sea == 1) & (hole == 1)
+        final[ocean_holes] = 0
 
         # 4) 3채널로 확장
         return np.repeat(final[np.newaxis, :, :], 3, axis=0)

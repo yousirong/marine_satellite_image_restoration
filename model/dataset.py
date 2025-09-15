@@ -170,13 +170,13 @@ class Dataset(torch.utils.data.Dataset):
                 land_removed_mask = self.remove_land_from_mask(mask, land_sea_mask_patch)
 
                 # 7. 해양 영역 검증
-                sea_mask = (land_sea_mask_patch == 0).astype(np.uint8)
+                sea_mask = (land_sea_mask_patch == 1).astype(np.uint8)  # 1=바다, 0=육지
                 total_ocean = sea_mask.sum()
 
                 if total_ocean == 0:
                     continue
 
-                ocean_holes = (land_removed_mask == 1) & (sea_mask == 1)
+                ocean_holes = (land_removed_mask == 0) & (sea_mask == 1)  # 0=hole, 1=valid
                 ocean_hole_ratio = ocean_holes.sum() / total_ocean
 
                 if ocean_hole_ratio >= 0.005:  # 0.5% 이상 (더 관대하게)
@@ -194,7 +194,10 @@ class Dataset(torch.utils.data.Dataset):
 
         if self.training:
             print(f"Failed to load valid sample after {max_attempts} attempts")
-        return self.create_dummy_sample()
+            raise RuntimeError(f"Failed to load valid sample after {max_attempts} attempts")
+        else:
+            print(f"Failed to load sample at index {index}, returning None to skip")
+            return None, None
 
     def adaptive_fill_missing(self, img):
         """
@@ -250,13 +253,6 @@ class Dataset(torch.utils.data.Dataset):
 
         return img
 
-    def create_dummy_sample(self):
-        """
-        로딩 실패 시 더미 샘플 생성
-        """
-        dummy_img = np.zeros((3, self.target_size, self.target_size), dtype=np.float32)
-        dummy_mask = np.ones((3, self.target_size, self.target_size), dtype=np.uint8)
-        return dummy_img, dummy_mask
 
     def load_mask(self, img, index):
         imgh, imgw = img.shape[1:]
@@ -285,10 +281,11 @@ class Dataset(torch.utils.data.Dataset):
 
     def remove_land_from_mask(self, mask_image, land_sea_mask_patch):
         """
+        해양 영역에서만 결측치 마스크를 생성하는 함수
         mask_image: np.array [3,H,W], 1=hole,0=valid
         land_sea_mask_patch: np.array [3,H,W], 1=sea,0=land
 
-        반환: np.array [3,H,W],  land(흰색=1), sea-hole(검은색=0), sea-valid(흰색=1)
+        반환: np.array [3,H,W], 해양 영역의 결측치만 0(검은색)으로 표시, 나머지는 1(흰색)
         """
         # 1) 1채널로 축소
         sea = land_sea_mask_patch[0]    # 1=sea, 0=land
@@ -297,8 +294,10 @@ class Dataset(torch.utils.data.Dataset):
         # 2) 기본값을 1(흰색)으로 세팅
         final = np.ones_like(hole, dtype=np.uint8)
 
-        # 3) 바다 영역의 hole만 0(검은색)으로 변경
-        final[(sea == 0) & (hole == 1)] = 0
+        # 3) 해양 영역(sea==1)의 결측치(hole==1)만 0(검은색)으로 변경
+        # 육지 영역의 결측치는 무시하고 해양 영역의 결측치만 복원 대상으로 설정
+        ocean_holes = (sea == 1) & (hole == 1)
+        final[ocean_holes] = 0
 
         # 4) 3채널로 확장
         return np.repeat(final[np.newaxis, :, :], 3, axis=0)
@@ -317,7 +316,7 @@ class Dataset(torch.utils.data.Dataset):
         """
         lm = np.load(path)
         print("Before conversion:", np.unique(lm))
-        lm = np.where(lm == 999, 1, 0).astype(np.uint8)
+        lm = np.where(lm == 999, 0, 1).astype(np.uint8)  # 0=육지(999), 1=바다(others)
         print("After conversion:", np.unique(lm))
         return lm
 

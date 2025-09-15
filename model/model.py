@@ -499,8 +499,16 @@ class RFRNetModel():
 
                     # Generator 시도
                     try:
-                        # forward pass
-                        masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_normalized)
+                        # 마스크가 모두 1인 경우 (모든 픽셀이 유효) 모델을 건너뛰고 GT 그대로 사용
+                        if torch.all(masks == 1):
+                            print(f"  - All pixels valid (mask=1), using GT passthrough for batch {batch_idx}")
+                            # 마스크가 모두 유효한 경우 GT를 그대로 사용
+                            comp_B = gt_normalized
+                            fake_B = gt_normalized
+                            masked_image = masked_images
+                        else:
+                            # 일반적인 모델 실행 (복원이 필요한 경우)
+                            masked_image, fake_B, comp_B = self.forward(masked_images, masks, gt_normalized)
 
                         # DEBUG: Raw model output
                         print(f"  - DEBUG: Raw model output (normalized space) min: {torch.min(fake_B):.4f}, max: {torch.max(fake_B):.4f}")
@@ -595,7 +603,9 @@ class RFRNetModel():
                             self.save_batch_images_grid(sample_gt_norm, gt_file_prefix, nrow=1, normalize=True)
                             self.save_batch_images_grid(sample_masked, masked_file_prefix, nrow=1, normalize=True)
                             self.save_batch_images_grid(sample_fake, fake_file_prefix, nrow=1, normalize=True)
-                            self.save_batch_images_grid(sample_comp, recon_file_prefix, nrow=1, normalize=True)
+                            # Grayscale로 변환하여 저장
+                            sample_comp_gray = torch.mean(sample_comp, dim=1, keepdim=True)
+                            self.save_batch_images_grid(sample_comp_gray, recon_file_prefix, nrow=1, normalize=True)
                             self.save_batch_images_grid(sample_mask, mask_file_prefix, nrow=1, normalize=False)
 
                             # CSV 저장용 데이터 준비 (원본 스케일)
@@ -630,16 +640,63 @@ class RFRNetModel():
                             else:
                                 gt_channel = sample_gt_orig[0, 0, :, :].cpu().numpy()
 
-                            # 해양 영역: -999가 아닌 값들
-                            ocean_region = (gt_channel != self.missing_value)
+                            # 파일명에서 좌표 추출하여 land_sea_mask 패치 가져오기
+                            fname_base = os.path.basename(filenames[k]) if isinstance(filenames[k], str) else f"test_{count}"
+                            m = re.search(r'y(\d+)_x(\d+)', fname_base)
+                            if m:
+                                y0, x0 = map(int, m.groups())
+                                try:
+                                    # 육지-해양 마스크 로드 (eval_goci_fullpatch.py와 동일한 방식)
+                                    land_sea_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
+                                    if os.path.exists(land_sea_mask_path):
+                                        lm = np.load(land_sea_mask_path)
+                                        land_sea_mask = np.where(lm == 999, 0, 1).astype(np.uint8)  # 0=육지(999), 1=바다(others)
 
-                            # 육지 영역은 결측치 계산에서 제외
-                            mask_degree[~ocean_region] = 1
+                                        # 패치 추출
+                                        patch_size = gt_degree.shape[0]
+                                        try:
+                                            land_sea_patch = land_sea_mask[y0:y0 + patch_size, x0:x0 + patch_size]
+                                            if land_sea_patch.shape != (patch_size, patch_size):
+                                                land_sea_patch = cv2.resize(land_sea_patch.astype(np.uint8), (patch_size, patch_size))
 
-                            # 육지 픽셀을 255로 마킹 (validation 함수와 호환)
-                            land_mask = ~ocean_region
-                            gt_degree[land_mask] = 255
-                            fake_degree[land_mask] = 255
+                                            # 해양 영역: land_sea_patch == 1
+                                            ocean_region = (land_sea_patch == 1)
+
+                                            # 육지 영역은 결측치 계산에서 제외
+                                            mask_degree[~ocean_region] = 1
+
+                                            # 육지 픽셀을 255로 마킹 (validation 함수와 호환)
+                                            land_mask = ~ocean_region
+                                            gt_degree[land_mask] = 255
+                                            fake_degree[land_mask] = 255
+                                        except IndexError:
+                                            # 패치가 범위를 벗어나면 기존 방식 유지
+                                            ocean_region = (gt_channel != self.missing_value)
+                                            mask_degree[~ocean_region] = 1
+                                            land_mask = ~ocean_region
+                                            gt_degree[land_mask] = 255
+                                            fake_degree[land_mask] = 255
+                                    else:
+                                        # 마스크 파일이 없으면 기존 방식 유지
+                                        ocean_region = (gt_channel != self.missing_value)
+                                        mask_degree[~ocean_region] = 1
+                                        land_mask = ~ocean_region
+                                        gt_degree[land_mask] = 255
+                                        fake_degree[land_mask] = 255
+                                except Exception as e:
+                                    # 오류 시 기존 방식 유지
+                                    ocean_region = (gt_channel != self.missing_value)
+                                    mask_degree[~ocean_region] = 1
+                                    land_mask = ~ocean_region
+                                    gt_degree[land_mask] = 255
+                                    fake_degree[land_mask] = 255
+                            else:
+                                # 좌표 추출 실패 시 기존 방식 유지
+                                ocean_region = (gt_channel != self.missing_value)
+                                mask_degree[~ocean_region] = 1
+                                land_mask = ~ocean_region
+                                gt_degree[land_mask] = 255
+                                fake_degree[land_mask] = 255
 
                             # CSV 저장
                             np.savetxt(os.path.join(result_degree_save_path_recon, f"img_{count}_{filename_no_ext}.csv"),
@@ -711,6 +768,10 @@ class RFRNetModel():
         self.real_B = gt_image
         self.mask = mask
         fake_B, _ = self.G(masked_image, mask)
+        
+        # 출력 범위 제한: GT와 동일한 범위로 클리핑 (0-1 범위, 정규화된 공간에서)
+        fake_B = torch.clamp(fake_B, 0.0, 1.0)
+        
         self.fake_B = fake_B
         self.comp_B = self.fake_B * (1 - mask) + self.real_B * mask
         return masked_image, self.fake_B, self.comp_B
@@ -750,13 +811,26 @@ class RFRNetModel():
                         mean_val = valid_pixels.mean()
                         # 블러된 값과 평균값의 가중평균
                         img_slice[hole_mask] = 0.7 * img_slice[hole_mask] + 0.3 * mean_val
+                        
+        # 출력 범위 제한: GT와 동일한 범위로 클리핑 (0-1 범위, 정규화된 공간에서)
+        fake_B = torch.clamp(fake_B, 0.0, 1.0)
         return fake_B
 
     def denormalize_to_original(self, normalized_tensor, data_min, data_max):
         """
-        정규화된 텐서를 원본 데이터 범위로 복원
+        정규화된 텐서를 원본 데이터 범위로 복원 (안전한 범위 제한 포함)
         """
-        return normalized_tensor * (data_max - data_min) + data_min
+        # 입력이 0-1 범위에 있는지 확인
+        clamped_tensor = torch.clamp(normalized_tensor, 0.0, 1.0)
+        
+        # 원본 범위로 복원
+        denormalized = clamped_tensor * (data_max - data_min) + data_min
+        
+        # 추가적인 안전장치: 합리적인 범위로 제한
+        # GT 데이터 분석 결과를 바탕으로 -100 ~ 100 범위로 제한
+        final_output = torch.clamp(denormalized, -100.0, 100.0)
+        
+        return final_output
 
     def check_model_health(self):
         """
