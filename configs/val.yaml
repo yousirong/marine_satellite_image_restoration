@@ -5,7 +5,7 @@ notes: 0~20 in range, else outlier
 # UST21
 # data_path: "/media/juneyonglee/My Book1/results/2020"
 # GOCI
-data_path: /home/juneyonglee/myhdd/GOCI_RRS/results/band2/2021/20210101
+data_path: /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/test/band2/20
 
 # UST21
 # land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy
@@ -13,8 +13,9 @@ data_path: /home/juneyonglee/myhdd/GOCI_RRS/results/band2/2021/20210101
 land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy
 
 # save_path: /home/juneyonglee/myhdd/UST21/performance
-save_path: /home/juneyonglee/myhdd/GOCI_RRS/performance/band2/2021/plot
+save_path: /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/performance/band2/20
 sample_size: 10000
 gpu_ids: [0, 1]
 # python -m model.run --c configs/val.yaml --val
+# python -m model.val_chl --yaml configs/val.yaml --quick
 # python /home/juneyonglee/Desktop/AY_ust/performance/val_goci_fullpatch.py

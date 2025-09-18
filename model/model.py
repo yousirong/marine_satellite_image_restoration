@@ -447,10 +447,16 @@ class RFRNetModel():
         result_degree_save_path_mask = os.path.join(result_degree_save_path, 'mask')
         result_degree_save_path_recon = os.path.join(result_degree_save_path, 'recon')
 
+        print(f"Creating directories...")
         for d in [result_save_path_recon, result_save_path_gt, result_save_path_mask,
                 result_save_path_masked, result_save_path_fake, result_degree_save_path,
                 result_degree_save_path_gt, result_degree_save_path_mask, result_degree_save_path_recon]:
-            os.makedirs(d, exist_ok=True)
+            try:
+                os.makedirs(d, exist_ok=True)
+                print(f"✅ Created: {d}")
+            except Exception as e:
+                print(f"❌ Failed to create {d}: {e}")
+                raise
 
         pbar = tqdm(total=total_test_images, desc="Processing test images")
 
@@ -768,10 +774,10 @@ class RFRNetModel():
         self.real_B = gt_image
         self.mask = mask
         fake_B, _ = self.G(masked_image, mask)
-        
+
         # 출력 범위 제한: GT와 동일한 범위로 클리핑 (0-1 범위, 정규화된 공간에서)
         fake_B = torch.clamp(fake_B, 0.0, 1.0)
-        
+
         self.fake_B = fake_B
         self.comp_B = self.fake_B * (1 - mask) + self.real_B * mask
         return masked_image, self.fake_B, self.comp_B
@@ -811,7 +817,7 @@ class RFRNetModel():
                         mean_val = valid_pixels.mean()
                         # 블러된 값과 평균값의 가중평균
                         img_slice[hole_mask] = 0.7 * img_slice[hole_mask] + 0.3 * mean_val
-                        
+
         # 출력 범위 제한: GT와 동일한 범위로 클리핑 (0-1 범위, 정규화된 공간에서)
         fake_B = torch.clamp(fake_B, 0.0, 1.0)
         return fake_B
@@ -822,14 +828,14 @@ class RFRNetModel():
         """
         # 입력이 0-1 범위에 있는지 확인
         clamped_tensor = torch.clamp(normalized_tensor, 0.0, 1.0)
-        
+
         # 원본 범위로 복원
         denormalized = clamped_tensor * (data_max - data_min) + data_min
-        
+
         # 추가적인 안전장치: 합리적인 범위로 제한
         # GT 데이터 분석 결과를 바탕으로 -100 ~ 100 범위로 제한
-        final_output = torch.clamp(denormalized, -100.0, 100.0)
-        
+        final_output = denormalized
+
         return final_output
 
     def check_model_health(self):
