@@ -18,6 +18,8 @@ def run():
     parser.add_argument('--finetune', action='store_true')
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--val', action='store_true')
+    parser.add_argument('--quick', action='store_true',
+                        help='Quick validation with limited samples for preview')
     parser.add_argument('--result_save_path', type=str, default=None,
                         help='Path where the test results will be saved')
     parser.add_argument('--data_path', type=str, default=None,
@@ -75,22 +77,31 @@ def run():
 
     # -------------------- VALIDATION --------------------
     elif args.val:
-        # validation 함수 호출 시 올바른 매개변수 사용
-        print("=== Running Validation ===")
+        # Quick 모드 체크
+        if args.quick:
+            print("=== Running Quick Validation (Limited Samples) ===")
+            sample_size = 1000  # Quick 모드에서는 1000개 파일만 처리
+            loss_rate_suffix = "quick_test"
+        else:
+            print("=== Running Full Validation ===")
+            sample_size = getattr(args, 'sample_size', None)  # YAML에서 설정한 값 사용
+            loss_rate_suffix = "full_validation"
+
         print(f"Using data_path: {args.data_path}")
         print(f"Using save_path: {args.save_path}")
         print(f"Using land_sea_mask_path: {args.land_sea_mask_path}")
-        print(f"Using sample_size: {args.sample_size}")
+        print(f"Using sample_size: {sample_size}")
 
         # loss_rate는 더미값 전달 (실제로는 마스크에서 계산됨)
-        dummy_loss_rate = 0  # 실제로는 사용되지 않음
+        dummy_loss_rate = loss_rate_suffix
 
         try:
             validate(
-                loss_rate=dummy_loss_rate,  # 더미값, 함수 내에서 실제 계산됨
-                data_path=args.data_path,   # 여기서 직접 args.data_path 사용 (degree 추가하지 않음)
+                loss_rate=dummy_loss_rate,
+                data_path=args.data_path,
                 save_path=args.save_path,
-                land_sea_mask_path=args.land_sea_mask_path
+                land_sea_mask_path=args.land_sea_mask_path,
+                sample_size=sample_size  # Quick 모드일 때 100개로 제한
             )
         except Exception as e:
             print(f"Validation failed: {e}")

@@ -583,15 +583,15 @@ if __name__ == '__main__':
     # 1. 모델 초기화 (model.py 사용)
     model = RFRNetModel()
     model.initialize_model(
-        path='/home/juneyonglee/Desktop/AY_ust/mydata/5th_years/GOCI_RRS_band3_1day/g_1000000.pth',
+        path='/home/juneyonglee/Desktop/AY_ust/mydata/5th_years/GOCI_RRS_band4_1day/g_1000000.pth',
         train=False,
         gpu_ids=[0, 1]
     )
     model.cuda()
 
     # 2. 데이터 경로 설정
-    base_data_dir = '/media/juneyonglee/My Book1/Preprocessed/GOCI_tiles_daily/band2/2021'
-    base_result = '/home/juneyonglee/myhdd/GOCI_RRS/daily_results/band2'
+    base_data_dir = '/media/juneyonglee/My Book1/Preprocessed/GOCI_tiles_daily/band4/2021'
+    base_result = '/home/juneyonglee/myhdd/GOCI_RRS/daily_results/band4'
     land_sea_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
 
     print("="*80)

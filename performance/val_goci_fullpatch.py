@@ -10,8 +10,8 @@ from matplotlib.colors import Normalize
 
 # ================== 설정 ==================
 # 기본 경로 설정
-BASE_RESULTS_DIR = '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band3/2021'
-BASE_PERFORMANCE_DIR = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band3/2021'
+BASE_RESULTS_DIR = '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band2/2021'
+BASE_PERFORMANCE_DIR = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band2/2021'
 
 # 고정 설정
 LAND_MASK_NPY = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
@@ -166,7 +166,7 @@ def load_full_image_from_patches(patch_dir):
 
     return full_img
 
-def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_name='jet'):
+def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_name='jet', global_vmin=None, global_vmax=None):
     land_mask = np.load(LAND_MASK_NPY)  # 999: land
     # 수정: eval과 동일하게 land-sea mask 설정
     land_sea_mask = np.where(land_mask == 999, 0, 1).astype(np.uint8)  # 0=육지(999), 1=바다
@@ -174,7 +174,7 @@ def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_nam
     ocean_bool = (land_sea_mask == 1)  # 해양 영역
 
     os.makedirs(out_dir, exist_ok=True)
-    out_tiff = os.path.join(out_dir, f'{file_prefix}.tiff')
+    # out_tiff = os.path.join(out_dir, f'{file_prefix}.tiff')
     out_png  = os.path.join(out_dir, f'{file_prefix}.png')
     out_bar  = os.path.join(out_dir, f'{file_prefix}_bar.png')
 
@@ -210,99 +210,62 @@ def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_nam
         total_pixels = full_img.size
         ocean_ratio = np.sum(ocean_bool) / total_pixels
         print(f"[DEBUG] Ocean ratio in full image: {ocean_ratio:.1%}")
-        
+
         # 해양 영역의 결측치만 빨간색으로 표시
         display_img[missing_ocean_mask] = 0.0   # 해양 결측 = red
-        display_img[valid_ocean_mask] = 1.0     # 유효 해양 = white  
+        display_img[valid_ocean_mask] = 1.0     # 유효 해양 = white
         # 육지는 0.5 (이미 위에서 설정됨) = black
-        
+
         vmin, vmax = 0, 1
         invalid_data_mask = np.zeros_like(full_img, dtype=bool)  # No invalid mask needed
         print(f"[{file_prefix.upper()}] Using 3-category mask: 0=missing_ocean(red), 0.5=land(black), 1=valid_ocean(white)")
-    elif 'recon' in file_prefix:
-        # For reconstruction, try different normalization approaches
-        invalid_data_mask = (full_img == -999) | (full_img == 0)
-        potential_valid = full_img[~invalid_data_mask & ~land_bool]
-        
-        if potential_valid.size == 0:
-            print(f"[{file_prefix.upper()}] WARN: No valid reconstruction data. Using default [0, 1].")
-            vmin, vmax = 0, 1
-        else:
-            print(f"[{file_prefix.upper()}] Raw recon stats: min={np.min(potential_valid):.2e}, max={np.max(potential_valid):.2e}")
-            
-            # Try several approaches to handle extreme values
-            
-            # Approach 1: Check if log transformation helps
-            positive_data = potential_valid[potential_valid > 0]
-            if positive_data.size > 0:
-                log_data = np.log10(np.abs(positive_data))
-                print(f"[{file_prefix.upper()}] Log10 stats: min={np.min(log_data):.2f}, max={np.max(log_data):.2f}")
-            
-            # Approach 2: Use median-based robust scaling
-            median_val = np.median(potential_valid)
-            mad = np.median(np.abs(potential_valid - median_val))  # Median Absolute Deviation
-            print(f"[{file_prefix.upper()}] Median={median_val:.2e}, MAD={mad:.2e}")
-            
-            # Approach 3: Try sigmoid-like normalization to [0,1]
-            # Use tanh to compress extreme values
-            if mad > 0 and not np.isinf(mad):
-                normalized = 0.5 * (1 + np.tanh((potential_valid - median_val) / (6 * mad)))
-                print(f"[{file_prefix.upper()}] After tanh normalization: min={np.min(normalized):.6f}, max={np.max(normalized):.6f}")
-                
-                # Create normalized full image for visualization
-                full_img_normalized = full_img.copy()
-                full_img_normalized[~invalid_data_mask & ~land_bool] = normalized
-                
-                # Use the normalized data for visualization
-                display_img = full_img_normalized.copy()
-                vmin, vmax = 0, 1
-                print(f"[{file_prefix.upper()}] Using tanh-normalized range [0, 1]")
-            else:
-                # Fallback: use simple percentile clipping
-                p1, p99 = np.percentile(potential_valid, [1, 99])
-                vmin, vmax = p1, p99
-                print(f"[{file_prefix.upper()}] Fallback to percentile range [{vmin:.2e}, {vmax:.2e}]")
-                display_img = full_img.copy()
-    else:  # GT data
-        # For GT, treat 1000 as invalid data (seems to be a fill value)
-        invalid_data_mask = (full_img == -999) | (full_img == 0) | (full_img == 1000)
-        valid_data = full_img[~invalid_data_mask & ~land_bool]
-        
-        if valid_data.size == 0:
-            print(f"[{file_prefix.upper()}] WARN: No valid GT data after removing 1000 values. Using default [0, 1].")
-            vmin, vmax = 0, 1
-        else:
-            vmin = np.percentile(valid_data, 1)
-            vmax = np.percentile(valid_data, 99)
-            print(f"[{file_prefix.upper()}] Using GT range [{vmin:.6f}, {vmax:.6f}] (excluded 1000 values).")
-            print(f"[{file_prefix.upper()}] Valid pixels: {valid_data.size}, Range: [{np.min(valid_data):.6f}, {np.max(valid_data):.6f}]")
+    elif 'recon' in file_prefix or 'gt' in file_prefix:
+        # Use same colorbar range calculation for both GT and recon data
+        if 'recon' in file_prefix:
+            invalid_data_mask = (full_img == -999) | (full_img == 0)
+        else:  # GT data
+            # For GT, treat 1000 as invalid data (seems to be a fill value)
+            invalid_data_mask = (full_img == -999) | (full_img == 0) | (full_img == 1000)
 
-    # Handle display image (may have been modified for recon normalization)
-    if 'recon' in file_prefix and 'display_img' in locals():
-        # display_img was already created in recon processing above
-        pass
-    elif 'mask' in file_prefix:
+        # Use global range if provided, otherwise calculate from current image
+        if global_vmin is not None and global_vmax is not None:
+            vmin, vmax = global_vmin, global_vmax
+            print(f"[{file_prefix.upper()}] Using global range [{vmin:.6f}, {vmax:.6f}]")
+        else:
+            valid_data = full_img[~invalid_data_mask & ~land_bool]
+            if valid_data.size == 0:
+                print(f"[{file_prefix.upper()}] WARN: No valid data. Using default [0, 1].")
+                vmin, vmax = 0, 1
+            else:
+                # Use percentile-based range for both GT and recon to ensure same colorbar scale
+                vmin = np.percentile(valid_data, 1)
+                vmax = np.percentile(valid_data, 99)
+                print(f"[{file_prefix.upper()}] Using calculated range [{vmin:.6f}, {vmax:.6f}]")
+                print(f"[{file_prefix.upper()}] Valid pixels: {valid_data.size}, Range: [{np.min(valid_data):.6f}, {np.max(valid_data):.6f}]")
+
+    # Handle display image
+    if 'mask' in file_prefix:
         # For masks, display_img was already created above with 3 categories
         pass
     else:
-        # Create colored image for GT 
+        # For both GT and recon, use the original data without normalization
         display_img = full_img.copy()
-    
+
     # Set invalid pixels to vmin for proper clipping (but not for masks)
     if not 'mask' in file_prefix:
         all_invalid_mask = invalid_data_mask | land_bool
         display_img[all_invalid_mask] = vmin
-    
+
     # Clip and colorize
     clipped = np.clip(display_img, vmin, vmax)
     colored = convert_raw_to_color(clipped, vmin=vmin, vmax=vmax, cmap_name=cmap_name)
-    
+
     # Apply final masks for visualization
     if 'mask' in file_prefix:
         # For masks, create completely custom colors for 3 categories
         # First initialize as black
         colored = np.zeros((display_img.shape[0], display_img.shape[1], 3), dtype=np.float32)
-        
+
         # Missing ocean pixels only = red (eval과 동일 로직)
         missing_ocean_only = (display_img == 0.0) & ocean_bool  # 해양 영역의 결측치만
         colored[missing_ocean_only] = [1.0, 0.0, 0.0]  # Red
@@ -316,7 +279,7 @@ def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_nam
         # All land pixels = black (regardless of missing status)
         colored[land_bool] = [0.0, 0.0, 0.0]  # Black
         print(f"[DEBUG] All land pixels set to black: {np.sum(land_bool)}")
-        
+
     else:
         colored[land_bool] = [0.0, 0.0, 0.0]  # Land = black
         # Invalid ocean data = jet colormap minimum (dark blue)
@@ -341,16 +304,55 @@ def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_nam
     plt.close(fig)
     print(f"[{file_prefix.upper()}] Saved colored PNG with colorbar: {out_bar}")
 
+def calculate_global_range(gt_img, recon_img):
+    """
+    Calculate a common colorbar range for GT and recon images.
+    """
+    land_mask = np.load(LAND_MASK_NPY)
+    land_sea_mask = np.where(land_mask == 999, 0, 1).astype(np.uint8)
+    land_bool = (land_sea_mask == 0)
+
+    all_valid_data = []
+
+    # Process GT data
+    if gt_img is not None:
+        gt_invalid_mask = (gt_img == -999) | (gt_img == 0) | (gt_img == 1000)
+        gt_valid = gt_img[~gt_invalid_mask & ~land_bool]
+        if gt_valid.size > 0:
+            all_valid_data.append(gt_valid)
+
+    # Process recon data
+    if recon_img is not None:
+        recon_invalid_mask = (recon_img == -999) | (recon_img == 0)
+        recon_valid = recon_img[~recon_invalid_mask & ~land_bool]
+        if recon_valid.size > 0:
+            all_valid_data.append(recon_valid)
+
+    if not all_valid_data:
+        print("[GLOBAL RANGE] No valid data found. Using default [0, 1].")
+        return 0, 1
+
+    # Combine all valid data
+    combined_data = np.concatenate(all_valid_data)
+
+    # Calculate global percentile range
+    global_vmin = np.percentile(combined_data, 1)
+    global_vmax = np.percentile(combined_data, 99)
+
+    print(f"[GLOBAL RANGE] Combined range [{global_vmin:.6f}, {global_vmax:.6f}] from {combined_data.size} valid pixels")
+
+    return global_vmin, global_vmax
+
 def process_and_average(image_list, data_type='default'):
     if not image_list:
         return None
-    
+
     print(f"[AVERAGE] Processing {len(image_list)} images for {data_type}")
     stacked_images = np.stack(image_list, axis=0)
-    
+
     # More careful handling of masked data
     masked_stacked_images = np.ma.masked_where((stacked_images == -999) | (stacked_images == 0), stacked_images)
-    
+
     if data_type == 'mask':
         # For masks, use majority vote instead of average
         valid_mask = ~masked_stacked_images.mask
@@ -363,7 +365,7 @@ def process_and_average(image_list, data_type='default'):
         # For GT and recon data, use mean of valid pixels
         averaged_img = np.ma.mean(masked_stacked_images, axis=0)
         averaged_img = averaged_img.filled(0)  # Fill masked values with 0
-    
+
     # Print statistics for debugging
     non_zero = averaged_img[averaged_img != 0]
     if non_zero.size > 0:
@@ -372,7 +374,7 @@ def process_and_average(image_list, data_type='default'):
               f"Mean: {np.mean(non_zero):.6f}")
     else:
         print(f"[AVERAGE] {data_type} - No non-zero pixels found!")
-    
+
     return averaged_img
 
 def process_date(base_date_path, out_root_dir):
@@ -391,51 +393,176 @@ def process_date(base_date_path, out_root_dir):
         # Create output directory for this specific time
         time_out_dir = os.path.join(out_root_dir, f"time_{time_idx:02d}_{time_subdir}")
 
-        for data_type in ['recon', 'gt', 'mask']:
+        # Load all images first
+        gt_img = None
+        recon_img = None
+        mask_img = None
+
+        for data_type in ['gt', 'recon', 'mask']:
             patch_dir = os.path.join(degree_path, data_type)
             if os.path.isdir(patch_dir):
                 print(f"  - Loading {data_type} data from: {patch_dir}")
                 full_img = load_full_image_from_patches(patch_dir)
                 if full_img is not None:
-                    # Save individual time images instead of collecting for averaging
                     if data_type == 'gt':
-                        save_image_with_details(full_img, time_out_dir, f'gt_{time_subdir}', 'GT Chlorophyll-a (mg/m³)')
+                        gt_img = full_img
                     elif data_type == 'recon':
-                        save_image_with_details(full_img, time_out_dir, f'recon_{time_subdir}', 'Recon Chlorophyll-a (mg/m³)')
+                        recon_img = full_img
                     elif data_type == 'mask':
-                        save_image_with_details(full_img, time_out_dir, f'mask_{time_subdir}', 'Mask', cmap_name='RdYlBu_r')
+                        mask_img = full_img
             else:
                 print(f"  - '{data_type}' directory not found in {degree_path}. Skipping.")
 
+        # Calculate global colorbar range for GT and recon
+        global_vmin, global_vmax = calculate_global_range(gt_img, recon_img)
+
+        # Save images with common colorbar range
+        if gt_img is not None:
+            save_image_with_details(gt_img, time_out_dir, f'gt_{time_subdir}', 'GT Chlorophyll-a (mg/m³)',
+                                   global_vmin=global_vmin, global_vmax=global_vmax)
+        if recon_img is not None:
+            save_image_with_details(recon_img, time_out_dir, f'recon_{time_subdir}', 'Recon Chlorophyll-a (mg/m³)',
+                                   global_vmin=global_vmin, global_vmax=global_vmax)
+        if mask_img is not None:
+            save_image_with_details(mask_img, time_out_dir, f'mask_{time_subdir}', 'Mask', cmap_name='RdYlBu_r')
+
+def process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask_path, target_dates):
+    """
+    여러 날짜를 일괄 처리하는 함수 (GOCI용)
+
+    Args:
+        base_results_dir: 결과 기본 경로 (예: '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band2/2021')
+        base_performance_dir: 성능 저장 기본 경로 (예: '/home/juneyonglee/myhdd/GOCI_RRS/performance/band2/2021')
+        land_sea_mask_path: GOCI 육지-해양 마스크 파일 경로
+        target_dates: 처리할 날짜 리스트 (예: ['20210101', '20210102'])
+    """
+    print(f"=== Processing Multiple GOCI Dates ===")
+    print(f"Base results dir: {base_results_dir}")
+    print(f"Base performance dir: {base_performance_dir}")
+    print(f"Target dates: {target_dates}")
+
+    success_count = 0
+    failed_dates = []
+
+    for date_str in target_dates:
+        if not date_str.strip():  # 빈 문자열 건너뛰기
+            continue
+
+        print(f"\n{'='*60}")
+        print(f"Processing GOCI Date: {date_str}")
+        print(f"{'='*60}")
+
+        try:
+            # 입력 및 출력 경로 구성
+            date_result_path = os.path.join(base_results_dir, date_str)
+            date_output_path = os.path.join(base_performance_dir, date_str)
+
+            print(f"Input path: {date_result_path}")
+            print(f"Output path: {date_output_path}")
+
+            # 경로 존재 확인
+            if not os.path.exists(date_result_path):
+                print(f"❌ Input path does not exist: {date_result_path}")
+                failed_dates.append((date_str, "Input path not found"))
+                continue
+
+            # 시간대별 하위 디렉토리 확인
+            time_subdirs = [d for d in os.listdir(date_result_path)
+                           if os.path.isdir(os.path.join(date_result_path, d))]
+
+            if not time_subdirs:
+                print(f"⚠️  No time subdirectories found in: {date_result_path}")
+                print(f"Available items: {os.listdir(date_result_path) if os.path.exists(date_result_path) else 'None'}")
+                failed_dates.append((date_str, "No time subdirectories found"))
+                continue
+
+            print(f"Found {len(time_subdirs)} time subdirectories: {time_subdirs}")
+
+            # 해양 마스크 존재 확인 (간단한 버전)
+            has_ocean_data = False
+            for time_subdir in time_subdirs[:3]:  # 처음 몇 개만 확인
+                degree_path = os.path.join(date_result_path, time_subdir, 'degree')
+                if os.path.exists(degree_path):
+                    mask_dir = os.path.join(degree_path, 'mask')
+                    if os.path.exists(mask_dir):
+                        mask_files = [f for f in os.listdir(mask_dir) if f.endswith('.csv')]
+                        if mask_files:
+                            has_ocean_data = True
+                            break
+
+            if not has_ocean_data:
+                print(f"⚠️  No ocean mask data found for {date_str}")
+                failed_dates.append((date_str, "No ocean mask data found"))
+                continue
+
+            # 처리 실행
+            process_date(date_result_path, date_output_path)
+
+            success_count += 1
+            print(f"✅ Successfully processed {date_str}")
+
+        except Exception as e:
+            print(f"❌ Error processing {date_str}: {e}")
+            failed_dates.append((date_str, str(e)))
+            continue
+
+    # 최종 결과 요약
+    print(f"\n{'='*60}")
+    print(f"GOCI PROCESSING SUMMARY")
+    print(f"{'='*60}")
+    print(f"Total dates requested: {len([d for d in target_dates if d.strip()])}")
+    print(f"Successfully processed: {success_count}")
+    print(f"Failed: {len(failed_dates)}")
+
+    if failed_dates:
+        print(f"\nFailed dates:")
+        for date_str, reason in failed_dates:
+            print(f"  - {date_str}: {reason}")
+
+    if success_count > 0:
+        print(f"\nResults saved to: {base_performance_dir}")
+
 # 메인 루프
 if __name__ == '__main__':
-    print("="*60)
-    print("========== FINDING DATES WITH OCEAN MASKS ==========")
-    print("="*60)
+    # 설정 변수들
+    base_results_dir = '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band2/2021'
+    base_performance_dir = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band2/2021'
+    land_sea_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
 
-    # 해양 마스크가 있는 날짜들을 자동으로 찾기
-    dates_with_ocean_masks = find_dates_with_ocean_masks()
+    # 처리할 날짜 리스트 (원하는 날짜들을 여기에 추가)
+    target_dates = ['20210101', '20210108','20210115','20210122','20210129']
 
-    if not dates_with_ocean_masks:
-        print("\n[WARNING] No dates found with ocean masks!")
-        print("Exiting without processing any dates.")
-    else:
-        print(f"\n[SUMMARY] Found {len(dates_with_ocean_masks)} dates with ocean masks:")
-        for date in dates_with_ocean_masks:
-            print(f"  - {date}")
+    # 선택한 날짜들만 처리
+    process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask_path, target_dates)
 
-        print("\n" + "="*60)
-        print("========== PROCESSING DATES WITH OCEAN MASKS ==========")
-        print("="*60)
-
-        for date_str in dates_with_ocean_masks:
-            print(f"\n======================================================")
-            print(f"========== PROCESSING DATE: {date_str} ==========")
-            print(f"======================================================")
-
-            base_path = os.path.join(BASE_RESULTS_DIR, date_str)
-            out_path = os.path.join(BASE_PERFORMANCE_DIR, date_str)
-
-            process_date(base_path, out_path)
-
-        print(f"\n[Main] All {len(dates_with_ocean_masks)} dates with ocean masks processed.")
+    # === 기존 자동 탐색 방식 (주석 처리됨) ===
+    # print("="*60)
+    # print("========== FINDING DATES WITH OCEAN MASKS ==========")
+    # print("="*60)
+    #
+    # # 해양 마스크가 있는 날짜들을 자동으로 찾기
+    # dates_with_ocean_masks = find_dates_with_ocean_masks()
+    #
+    # if not dates_with_ocean_masks:
+    #     print("\n[WARNING] No dates found with ocean masks!")
+    #     print("Exiting without processing any dates.")
+    # else:
+    #     print(f"\n[SUMMARY] Found {len(dates_with_ocean_masks)} dates with ocean masks:")
+    #     for date in dates_with_ocean_masks:
+    #         print(f"  - {date}")
+    #
+    #     print("\n" + "="*60)
+    #     print("========== PROCESSING DATES WITH OCEAN MASKS ==========")
+    #     print("="*60)
+    #
+    #     for date_str in dates_with_ocean_masks:
+    #         print(f"\n======================================================")
+    #         print(f"========== PROCESSING DATE: {date_str} ==========")
+    #         print(f"======================================================")
+    #
+    #         base_path = os.path.join(BASE_RESULTS_DIR, date_str)
+    #         out_path = os.path.join(BASE_PERFORMANCE_DIR, date_str)
+    #
+    #         process_date(base_path, out_path)
+    #
+    #     print(f"\n[Main] All {len(dates_with_ocean_masks)} dates with ocean masks processed.")

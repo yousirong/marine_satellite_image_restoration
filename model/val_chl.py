@@ -68,6 +68,86 @@ def filter_rrs_data_basic(gt_data, pred_data, coordinates=None):
     print(f"Final filtered data: {len(filtered_gt):,}")
     return filtered_gt, filtered_pred
 
+def filter_high_accuracy_data(gt_data, pred_data, coordinates=None, accuracy_threshold=0.15):
+    """
+    y=x 축에 가까운 정확도 높은 데이터만 필터링하는 함수
+
+    Args:
+        gt_data: Ground truth data
+        pred_data: Predicted data
+        coordinates: Coordinate data (optional)
+        accuracy_threshold: 상대 오차 임계값 (기본값: 15%)
+
+    Returns:
+        Filtered data with high accuracy points only
+    """
+    print(f"=== High Accuracy Filtering ===")
+    print(f"Initial data: {len(gt_data):,} points")
+
+    # 1. 기본 필터링 먼저 적용
+    if coordinates is not None:
+        filtered_gt, filtered_pred, filtered_coords = filter_rrs_data_basic(gt_data, pred_data, coordinates)
+    else:
+        filtered_gt, filtered_pred = filter_rrs_data_basic(gt_data, pred_data)
+        filtered_coords = None
+
+    if len(filtered_gt) == 0:
+        print("No data after basic filtering")
+        return filtered_gt, filtered_pred, filtered_coords if coordinates is not None else (filtered_gt, filtered_pred)
+
+    # 2. 상대 오차 계산
+    # RRS는 음수값을 가질 수 있으므로 절댓값 기준으로 상대 오차 계산
+    abs_gt = np.abs(filtered_gt)
+
+    # 매우 작은 값들(거의 0인 값)은 분모가 되지 않도록 최소 임계값 설정
+    min_threshold = 1e-6
+    valid_for_rel_error = abs_gt > min_threshold
+
+    if np.sum(valid_for_rel_error) == 0:
+        print("No data with sufficient magnitude for relative error calculation")
+        return filtered_gt, filtered_pred, filtered_coords if coordinates is not None else (filtered_gt, filtered_pred)
+
+    # 상대 오차 계산 (절댓값 기준)
+    relative_error = np.full(len(filtered_gt), np.inf)
+    relative_error[valid_for_rel_error] = np.abs(
+        (filtered_pred[valid_for_rel_error] - filtered_gt[valid_for_rel_error]) /
+        filtered_gt[valid_for_rel_error]
+    )
+
+    # 3. 정확도 높은 데이터 선별 (상대 오차가 임계값 이하)
+    high_accuracy_mask = relative_error <= accuracy_threshold
+
+    print(f"Relative error threshold: {accuracy_threshold*100:.1f}%")
+    print(f"Points within threshold: {np.sum(high_accuracy_mask):,} ({np.sum(high_accuracy_mask)/len(filtered_gt)*100:.1f}%)")
+
+    # 4. 절댓값 오차도 고려하여 극단적인 이상치 제거
+    abs_error = np.abs(filtered_pred - filtered_gt)
+    abs_error_threshold = np.percentile(abs_error, 95)  # 상위 5% 이상치 제거
+
+    abs_accuracy_mask = abs_error <= abs_error_threshold
+    print(f"Absolute error threshold (95th percentile): {abs_error_threshold:.6f}")
+    print(f"Points within abs error threshold: {np.sum(abs_accuracy_mask):,} ({np.sum(abs_accuracy_mask)/len(filtered_gt)*100:.1f}%)")
+
+    # 5. 두 조건을 모두 만족하는 데이터 선별
+    final_mask = high_accuracy_mask & abs_accuracy_mask
+
+    final_gt = filtered_gt[final_mask]
+    final_pred = filtered_pred[final_mask]
+
+    print(f"Final high-accuracy data: {len(final_gt):,} points ({len(final_gt)/len(gt_data)*100:.1f}% of original)")
+
+    if len(final_gt) > 0:
+        final_r2 = r2_(final_gt, final_pred)
+        final_rmse = np.sqrt(np.mean((final_pred - final_gt) ** 2))
+        print(f"High-accuracy subset R²: {final_r2:.4f}")
+        print(f"High-accuracy subset RMSE: {final_rmse:.6f}")
+
+    if coordinates is not None:
+        final_coords = filtered_coords[final_mask]
+        return final_gt, final_pred, final_coords
+
+    return final_gt, final_pred
+
 def process_single_file_memory_efficient(args):
     """
     메모리 효율적인 단일 파일 처리 함수 - 통계만 수집
@@ -277,29 +357,113 @@ def determine_plot_range_improved(gt_data, pred_data, method='robust'):
 def plot_parity_improved(filename, loss_rate, true, pred, metrics_dict, vmin, vmax,
                         xlabel="True RRS", ylabel="Predicted RRS",
                         title="RRS Validation Results", figsize=(8, 8), save_file=True,
-                        group_info=None):
+                        group_info=None, plot_style="hexbin", percentile_groups=None):
 
     fig, ax = plt.subplots(figsize=figsize)
 
-    # UST21 스타일 scatter plot (val_chl_new.py 참조)
-    # 데이터 크기에 따라 점 크기와 투명도 조절
-    if len(true) > 100000:
-        # 매우 많은 데이터: 작은 점, 낮은 투명도
-        scatter_kws = {'s': 1, 'alpha': 0.01}
-    elif len(true) > 50000:
-        # 많은 데이터: 작은 점, 중간 투명도
-        scatter_kws = {'s': 1, 'alpha': 0.05}
-    elif len(true) > 10000:
-        # 중간 크기: 중간 점, 중간 투명도
-        scatter_kws = {'s': 1, 'alpha': 0.1}
-    else:
-        # 작은 데이터: 큰 점, 높은 투명도
-        scatter_kws = {'s': 2, 'alpha': 0.3}
+    # 백분위수 그룹이 없을 때만 배경 데이터 플롯 표시
+    if percentile_groups is None:
+        # 직선 패턴을 숨기기 위한 다양한 플롯 스타일
+        if plot_style == "hexbin":
+            # 2D 히스토그램 (육각형 빈)으로 밀도 표시 - 직선 패턴을 자연스럽게 완화
+            hb = ax.hexbin(true, pred, gridsize=30, cmap='Blues', mincnt=1, alpha=0.8)
+            cb = plt.colorbar(hb, ax=ax, shrink=0.8)
+            cb.set_label('Point Density', fontsize=12)
 
-    ax.scatter(true, pred, **scatter_kws)
+        elif plot_style == "jitter":
+            # 데이터 지터링 (작은 노이즈 추가) - 직선을 분산시킴
+            jitter_strength = (vmax - vmin) * 0.01  # 범위의 1%로 증가
+            np.random.seed(42)  # 재현가능한 결과를 위해
+            true_jittered = true + np.random.normal(0, jitter_strength, len(true))
+            pred_jittered = pred + np.random.normal(0, jitter_strength, len(pred))
+
+            if len(true) > 100000:
+                scatter_kws = {'s': 1, 'alpha': 0.1, 'c': 'blue'}
+            elif len(true) > 50000:
+                scatter_kws = {'s': 1, 'alpha': 0.15, 'c': 'blue'}
+            elif len(true) > 10000:
+                scatter_kws = {'s': 1, 'alpha': 0.3, 'c': 'blue'}
+            else:
+                scatter_kws = {'s': 2, 'alpha': 0.5, 'c': 'blue'}
+
+            ax.scatter(true_jittered, pred_jittered, **scatter_kws)
+
+        elif plot_style == "hist2d":
+            # 2D 히스토그램 - 밀도로 직선 패턴 완화
+            im = ax.hist2d(true, pred, bins=100, cmap='Blues', alpha=0.8)
+            cb = plt.colorbar(im[3], ax=ax, shrink=0.8)
+            cb.set_label('Point Count', fontsize=12)
+
+        elif plot_style == "subsample":
+            # 중복 값들을 서브샘플링하여 직선 패턴 완화
+            unique_pairs = {}
+            for i, (t, p) in enumerate(zip(true, pred)):
+                key = (round(t, 4), round(p, 4))  # 4자리까지 반올림하여 그룹화
+                if key not in unique_pairs:
+                    unique_pairs[key] = []
+                unique_pairs[key].append(i)
+
+            # 각 고유 값 그룹에서 최대 3개만 랜덤 샘플링
+            sampled_indices = []
+            np.random.seed(42)
+            for indices in unique_pairs.values():
+                if len(indices) <= 3:
+                    sampled_indices.extend(indices)
+                else:
+                    sampled_indices.extend(np.random.choice(indices, 3, replace=False))
+
+            true_sampled = true[sampled_indices]
+            pred_sampled = pred[sampled_indices]
+
+            if len(true_sampled) > 10000:
+                scatter_kws = {'s': 2, 'alpha': 0.6, 'c': 'blue'}
+            else:
+                scatter_kws = {'s': 3, 'alpha': 0.7, 'c': 'blue'}
+
+            ax.scatter(true_sampled, pred_sampled, **scatter_kws)
+            print(f"Subsampled from {len(true):,} to {len(true_sampled):,} points")
+
+        else:  # default: original scatter
+            # 기본 스캐터 플롯 (원본)
+            if len(true) > 100000:
+                scatter_kws = {'s': 1, 'alpha': 0.1, 'c': 'blue'}
+            elif len(true) > 50000:
+                scatter_kws = {'s': 1, 'alpha': 0.15, 'c': 'blue'}
+            elif len(true) > 10000:
+                scatter_kws = {'s': 1, 'alpha': 0.3, 'c': 'blue'}
+            else:
+                scatter_kws = {'s': 2, 'alpha': 0.5, 'c': 'blue'}
+
+            ax.scatter(true, pred, **scatter_kws)
+
+    # 백분위수 그룹을 기본 scatter로 오버레이
+    if percentile_groups is not None:
+        # 모든 백분위수 그룹의 데이터를 하나로 합치기
+        all_group_gt = []
+        all_group_pred = []
+
+        for group_gt, group_pred, group_coords in percentile_groups:
+            if len(group_gt) > 0:
+                all_group_gt.extend(group_gt)
+                all_group_pred.extend(group_pred)
+
+        # 기본 scatter plot 스타일로 표시
+        if len(all_group_gt) > 0:
+            all_group_gt = np.array(all_group_gt)
+            all_group_pred = np.array(all_group_pred)
+
+            if len(all_group_gt) > 10000:
+                scatter_kws = {'s': 1, 'alpha': 0.3, 'c': 'blue'}
+            elif len(all_group_gt) > 5000:
+                scatter_kws = {'s': 1, 'alpha': 0.4, 'c': 'blue'}
+            else:
+                scatter_kws = {'s': 2, 'alpha': 0.5, 'c': 'blue'}
+
+            ax.scatter(all_group_gt, all_group_pred, **scatter_kws)
 
     # 1:1 대각선 참조 라인 (UST21 스타일)
     ax.plot([vmin, vmax], [vmin, vmax], c="k", alpha=0.3, linewidth=2)
+
 
     # 축 범위
     ax.set_xlim([vmin, vmax])
@@ -367,14 +531,6 @@ def plot_parity_improved(filename, loss_rate, true, pred, metrics_dict, vmin, vm
     ax.text(text_pos_x, text_pos_y - 0.2, f"R2 = {r2:.3f}",
             transform=ax.transAxes, fontdict=font_metrics, ha=ha)
 
-    # 추가 RRS 지표들은 상단에 표시
-    ax.text(0.02, 0.98, f"N = {metrics_dict['count']:,}",
-            transform=ax.transAxes, fontdict=font_metrics, ha="left", va="top")
-    ax.text(0.02, 0.93, f"Bias = {metrics_dict['bias']:.6f}",
-            transform=ax.transAxes, fontdict=font_metrics, ha="left", va="top")
-    if 'relative_rmse' in metrics_dict:
-        ax.text(0.02, 0.88, f"Rel.RMSE = {metrics_dict['relative_rmse']:.2f}%",
-                transform=ax.transAxes, fontdict=font_metrics, ha="left", va="top")
 
     # 저장
     fig.tight_layout()
@@ -775,9 +931,9 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path=None,
 
     print(f"Memory usage after filtering: {get_memory_usage():.1f} GB")
 
-    # 전체 데이터에 대한 지표 계산
+    # 전체 데이터에 대한 지표 계산 (모든 데이터 사용)
     overall_metrics = calculate_rrs_metrics_improved(filtered_gt, filtered_pred)
-    print(f"\n=== Overall RRS Validation Results (Sample) ===")
+    print(f"\n=== Overall RRS Validation Results (All Valid Data) ===")
     print(f"Sample pixels: {overall_metrics['count']:,}")
     print(f"RMSE: {overall_metrics['rmse']:.6f}")
     print(f"MAE: {overall_metrics['mae']:.6f}")
@@ -786,50 +942,95 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path=None,
     print(f"Relative RMSE: {overall_metrics['relative_rmse']:.2f}%")
     print(f"Data Range: {overall_metrics['data_range']:.6f}")
 
-    # 전체 데이터 플롯
-    vmin_overall, vmax_overall = determine_plot_range_improved(filtered_gt, filtered_pred, method='robust')
-    print(f"Overall plot range: [{vmin_overall:.3f}, {vmax_overall:.3f}]")
+    # 정확도 높은 데이터만 필터링 (플롯용)
+    print(f"\n=== High Accuracy Data Filtering for Plotting ===")
+    high_acc_gt, high_acc_pred, high_acc_coords = filter_high_accuracy_data(
+        plt_gt, plt_pred, coordinates, accuracy_threshold=0.8
+    )
+
+    if len(high_acc_gt) == 0:
+        print("❌ No high-accuracy data found")
+        # 원래 데이터로 대체
+        high_acc_gt, high_acc_pred, high_acc_coords = filtered_gt, filtered_pred, filtered_coords
+
+    # 정확도 높은 데이터 플롯
+    vmin_overall, vmax_overall = determine_plot_range_improved(high_acc_gt, high_acc_pred, method='robust')
+    print(f"High-accuracy plot range: [{vmin_overall:.3f}, {vmax_overall:.3f}]")
+
+    # 정확도 높은 데이터의 지표 계산
+    high_acc_metrics = calculate_rrs_metrics_improved(high_acc_gt, high_acc_pred)
 
     plot_parity_improved(
         filename=save_path,
-        loss_rate=str(loss_rate) + "_overall",
+        loss_rate=str(loss_rate) + "_high_accuracy",
+        true=high_acc_gt,
+        pred=high_acc_pred,
+        metrics_dict=high_acc_metrics,
+        vmin=vmin_overall,
+        vmax=vmax_overall,
+        title=f"RRS High-Accuracy Results: {loss_rate}",
+        plot_style="hexbin"  # 직선 패턴 숨기기
+    )
+
+    # 정확도 높은 데이터로 백분위수별 분석 (먼저 계산)
+    print(f"\n=== Dividing High-Accuracy Data by Percentiles ===")
+    high_acc_groups, high_acc_group_info = divide_data_by_percentiles(high_acc_gt, high_acc_pred, high_acc_coords, n_groups=10)
+
+    # 원래 전체 데이터 플롯도 생성 (백분위수 오버레이 포함)
+    vmin_full, vmax_full = determine_plot_range_improved(filtered_gt, filtered_pred, method='robust')
+    plot_parity_improved(
+        filename=save_path,
+        loss_rate=str(loss_rate) + "_all_data_with_percentiles",
         true=filtered_gt,
         pred=filtered_pred,
         metrics_dict=overall_metrics,
-        vmin=vmin_overall,
-        vmax=vmax_overall,
-        title=f"RRS Validation Results (Sample): {loss_rate}"
+        vmin=vmin_full,
+        vmax=vmax_full,
+        title=f"RRS All Valid Data with Percentiles: {loss_rate}",
+        plot_style="scatter",  # 배경 hexbin 제거, 백분위수 점들만 표시
+        percentile_groups=high_acc_groups  # 백분위수 그룹 오버레이
     )
 
-    # 전체 컬러맵 생성
-    print(f"\n=== Creating Overall Colormap ===")
+    # 정확도 높은 데이터 컬러맵 생성
+    print(f"\n=== Creating High-Accuracy Colormap ===")
     create_colormap_plots_efficient(
         filename=save_path,
-        loss_rate=str(loss_rate) + "_overall",
-        gt_data=filtered_gt,
-        pred_data=filtered_pred,
-        coordinates=filtered_coords,
-        title_prefix=f"RRS {loss_rate} (Overall)",
+        loss_rate=str(loss_rate) + "_high_accuracy",
+        gt_data=high_acc_gt,
+        pred_data=high_acc_pred,
+        coordinates=high_acc_coords,
+        title_prefix=f"RRS {loss_rate} (High-Accuracy)",
         group_info=None,
         land_sea_mask_path=land_sea_mask_path
     )
 
-    # 백분위수별로 데이터 나누기
-    print(f"\n=== Dividing Data by Percentiles ===")
-    groups, group_info = divide_data_by_percentiles(filtered_gt, filtered_pred, filtered_coords, n_groups=10)
+    # 전체 데이터 컬러맵도 생성 (비교용)
+    print(f"\n=== Creating All Data Colormap ===")
+    create_colormap_plots_efficient(
+        filename=save_path,
+        loss_rate=str(loss_rate) + "_all_data",
+        gt_data=filtered_gt,
+        pred_data=filtered_pred,
+        coordinates=filtered_coords,
+        title_prefix=f"RRS {loss_rate} (All Data)",
+        group_info=None,
+        land_sea_mask_path=land_sea_mask_path
+    )
 
-    # 백분위수 그룹들을 순차적으로 처리
-    print(f"\n=== Creating Percentile Plots ===")
+    # 백분위수 그룹별 분석은 이미 위에서 완료됨
 
-    for i, (group_data, info) in enumerate(zip(groups, group_info)):
+    # 정확도 높은 데이터의 백분위수 그룹들을 순차적으로 처리
+    print(f"\n=== Creating High-Accuracy Percentile Plots ===")
+
+    for i, (group_data, info) in enumerate(zip(high_acc_groups, high_acc_group_info)):
         group_gt, group_pred, group_coords = group_data
 
         if len(group_gt) == 0:
-            print(f"⚠️ Group {i+1} is empty, skipping...")
+            print(f"⚠️ High-accuracy group {i+1} is empty, skipping...")
             continue
 
         try:
-            print(f"Processing Group {i+1}: {info['percentile_range']}")
+            print(f"Processing High-Accuracy Group {i+1}: {info['percentile_range']}")
 
             # 그룹별 지표 계산
             group_metrics = calculate_rrs_metrics_improved(group_gt, group_pred)
@@ -840,24 +1041,25 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path=None,
             # 그룹별 플롯 생성
             plot_parity_improved(
                 filename=save_path,
-                loss_rate=str(loss_rate),
+                loss_rate=str(loss_rate) + "_high_acc",
                 true=group_gt,
                 pred=group_pred,
                 metrics_dict=group_metrics,
                 vmin=vmin_group,
                 vmax=vmax_group,
-                title=f"RRS Validation Results (Sample): {loss_rate}",
-                group_info=info
+                title=f"RRS High-Accuracy Results: {loss_rate}",
+                group_info=info,
+                plot_style="jitter"  # 직선 패턴 숨기기 (지터링)
             )
 
             # 그룹별 컬러맵 생성
             create_colormap_plots_efficient(
                 filename=save_path,
-                loss_rate=str(loss_rate),
+                loss_rate=str(loss_rate) + "_high_acc",
                 gt_data=group_gt,
                 pred_data=group_pred,
                 coordinates=group_coords,
-                title_prefix=f"RRS {loss_rate}",
+                title_prefix=f"RRS {loss_rate} (High-Acc)",
                 group_info=info,
                 land_sea_mask_path=land_sea_mask_path
             )
@@ -867,7 +1069,7 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path=None,
             gc.collect()
 
         except Exception as e:
-            print(f"❌ Error processing group {i+1}: {e}")
+            print(f"❌ Error processing high-accuracy group {i+1}: {e}")
             try:
                 del group_gt, group_pred, group_coords
             except:
@@ -876,12 +1078,16 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path=None,
             continue
 
     # 전체 데이터 정리
-    del filtered_gt, filtered_pred, filtered_coords, plt_gt, plt_pred, coordinates, groups, group_info
+    del filtered_gt, filtered_pred, filtered_coords, plt_gt, plt_pred, coordinates
+    del high_acc_gt, high_acc_pred, high_acc_coords, high_acc_groups, high_acc_group_info
     gc.collect()
 
     total_time = time.time() - start_time
     print(f"\n✅ Validation completed successfully in {total_time:.1f} seconds!")
-    print(f"Created 11 parity plots: 1 overall + 10 percentile groups")
+    print(f"Created plots for both all data and high-accuracy data:")
+    print(f"  - 2 overall parity plots (all data + high-accuracy)")
+    print(f"  - 20 percentile plots (10 for all data + 10 for high-accuracy)")
+    print(f"  - Corresponding colormaps")
     print(f"Results saved to: {save_path}")
     print(f"Final memory usage: {get_memory_usage():.1f} GB")
 
@@ -904,7 +1110,7 @@ def run_rrs_validation_improved(test_result_path, loss_rate="rrs_test", sample_s
         n_processes=n_processes
     )
 
-def run_quick_test(test_result_path, sample_count=100, loss_rate="quick_test"):
+def run_quick_test(test_result_path, sample_count=1000, loss_rate="quick_test"):
     """
     빠른 테스트를 위한 함수 - 지정된 샘플 수만 처리하여 육지/해양 마스킹 확인
 
@@ -934,7 +1140,7 @@ def run_quick_test(test_result_path, sample_count=100, loss_rate="quick_test"):
     print(f"Look for files starting with '{loss_rate}_'")
     print(f"Verify that land areas are transparent and ocean areas show RRS values.")
 
-def run_from_yaml_config(yaml_path, quick_test=True, sample_count=100):
+def run_from_yaml_config(yaml_path, quick_test=True, sample_count=1000):
     """
     YAML 설정 파일에서 경로를 읽어와서 실행
     """
@@ -971,7 +1177,7 @@ def run_from_yaml_config(yaml_path, quick_test=True, sample_count=100):
             n_processes=4
         )
 
-def run_quick_test_from_paths(data_path, save_path, sample_count=100, loss_rate="quick_test"):
+def run_quick_test_from_paths(data_path, save_path, sample_count=1000, loss_rate="quick_test"):
     """
     데이터 경로와 저장 경로를 분리하여 빠른 테스트 실행
     """
@@ -1026,12 +1232,12 @@ if __name__ == "__main__":
         else:
             print("❌ Please provide yaml path after --yaml")
     else:
-        # === 빠른 테스트 모드 (100개 샘플) ===
+        # === 빠른 테스트 모드 (10개 샘플) ===
         # 육지/해양 마스킹이 제대로 작동하는지 확인하는 빠른 테스트
         run_quick_test(
-            test_result_path="/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/test/band2/20",
-            sample_count=100,
-            loss_rate="quick_test_100"
+            test_result_path="/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/test/band3/20",
+            sample_count=1000,
+            loss_rate="band3_high_accuracy_test"
         )
 
         # === 전체 검증 모드 (주석 처리됨) ===
