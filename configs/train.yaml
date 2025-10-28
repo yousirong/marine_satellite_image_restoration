@@ -30,10 +30,10 @@ project_name: RRS
 exp_name: GOCI_RRS_band4_1day
 notes: RRS
 
-data_root: /media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/band4/train
-mask_root: /media/juneyonglee/My Book1/Preprocessed/GOCI_RRS/mask/band4/train
-model_save_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band4_1day/
-model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band4_1day/
+data_root: /media/juneyonglee/My Book/Preprocessed/GOCI_RRS/band2/train
+mask_root: /media/juneyonglee/My Book/Preprocessed/GOCI_RRS/mask/band2/train
+model_save_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/
+model_path: /home/juneyonglee/MyData/5th_years/GOCI_RRS_band2_1day/g_999000.pth
 # land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999_flipped.npy
 land_sea_mask_path: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy
 

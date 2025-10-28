@@ -166,6 +166,203 @@ def load_full_image_from_patches(patch_dir):
 
     return full_img
 
+def plot_parity_improved(filename, loss_rate, true, pred, metrics_dict, vmin, vmax,
+                        xlabel="True RRS", ylabel="Predicted RRS",
+                        title="RRS Validation Results", figsize=(8, 8), save_file=True,
+                        group_info=None, plot_style="hexbin", percentile_groups=None):
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # 백분위수 그룹이 없을 때만 배경 데이터 플롯 표시
+    if percentile_groups is None:
+        # 직선 패턴을 숨기기 위한 다양한 플롯 스타일
+        if plot_style == "hexbin":
+            # 2D 히스토그램 (육각형 빈)으로 밀도 표시 - 직선 패턴을 자연스럽게 완화
+            hb = ax.hexbin(true, pred, gridsize=30, cmap='Blues', mincnt=1, alpha=0.8)
+            cb = plt.colorbar(hb, ax=ax, shrink=0.8)
+            cb.set_label('Point Density', fontsize=12)
+
+        elif plot_style == "jitter":
+            # 데이터 지터링 (작은 노이즈 추가) - 직선을 분산시킴
+            jitter_strength = (vmax - vmin) * 0.01  # 범위의 1%로 증가
+            np.random.seed(42)  # 재현가능한 결과를 위해
+            true_jittered = true + np.random.normal(0, jitter_strength, len(true))
+            pred_jittered = pred + np.random.normal(0, jitter_strength, len(pred))
+
+            if len(true) > 100000:
+                scatter_kws = {'s': 1, 'alpha': 0.1, 'c': 'blue'}
+            elif len(true) > 50000:
+                scatter_kws = {'s': 1, 'alpha': 0.15, 'c': 'blue'}
+            elif len(true) > 10000:
+                scatter_kws = {'s': 1, 'alpha': 0.3, 'c': 'blue'}
+            else:
+                scatter_kws = {'s': 2, 'alpha': 0.5, 'c': 'blue'}
+
+            ax.scatter(true_jittered, pred_jittered, **scatter_kws)
+
+        elif plot_style == "hist2d":
+            # 2D 히스토그램 - 밀도로 직선 패턴 완화
+            im = ax.hist2d(true, pred, bins=100, cmap='Blues', alpha=0.8)
+            cb = plt.colorbar(im[3], ax=ax, shrink=0.8)
+            cb.set_label('Point Count', fontsize=12)
+
+        elif plot_style == "subsample":
+            # 중복 값들을 서브샘플링하여 직선 패턴 완화
+            unique_pairs = {}
+            for i, (t, p) in enumerate(zip(true, pred)):
+                key = (round(t, 4), round(p, 4))  # 4자리까지 반올림하여 그룹화
+                if key not in unique_pairs:
+                    unique_pairs[key] = []
+                unique_pairs[key].append(i)
+
+            # 각 고유 값 그룹에서 최대 3개만 랜덤 샘플링
+            sampled_indices = []
+            np.random.seed(42)
+            for indices in unique_pairs.values():
+                if len(indices) <= 3:
+                    sampled_indices.extend(indices)
+                else:
+                    sampled_indices.extend(np.random.choice(indices, 3, replace=False))
+
+            true_sampled = true[sampled_indices]
+            pred_sampled = pred[sampled_indices]
+
+            if len(true_sampled) > 10000:
+                scatter_kws = {'s': 2, 'alpha': 0.6, 'c': 'blue'}
+            else:
+                scatter_kws = {'s': 3, 'alpha': 0.7, 'c': 'blue'}
+
+            ax.scatter(true_sampled, pred_sampled, **scatter_kws)
+            print(f"Subsampled from {len(true):,} to {len(true_sampled):,} points")
+
+        else:  # default: original scatter
+            # 기본 스캐터 플롯 (원본)
+            if len(true) > 100000:
+                scatter_kws = {'s': 1, 'alpha': 0.1, 'c': 'blue'}
+            elif len(true) > 50000:
+                scatter_kws = {'s': 1, 'alpha': 0.15, 'c': 'blue'}
+            elif len(true) > 10000:
+                scatter_kws = {'s': 1, 'alpha': 0.3, 'c': 'blue'}
+            else:
+                scatter_kws = {'s': 2, 'alpha': 0.5, 'c': 'blue'}
+
+            ax.scatter(true, pred, **scatter_kws)
+
+    # 백분위수 그룹을 기본 scatter로 오버레이
+    if percentile_groups is not None:
+        # 모든 백분위수 그룹의 데이터를 하나로 합치기
+        all_group_gt = []
+        all_group_pred = []
+
+        for group_gt, group_pred, group_coords in percentile_groups:
+            if len(group_gt) > 0:
+                all_group_gt.extend(group_gt)
+                all_group_pred.extend(group_pred)
+
+        # 기본 scatter plot 스타일로 표시
+        if len(all_group_gt) > 0:
+            all_group_gt = np.array(all_group_gt)
+            all_group_pred = np.array(all_group_pred)
+
+            if len(all_group_gt) > 10000:
+                scatter_kws = {'s': 1, 'alpha': 0.3, 'c': 'blue'}
+            elif len(all_group_gt) > 5000:
+                scatter_kws = {'s': 1, 'alpha': 0.4, 'c': 'blue'}
+            else:
+                scatter_kws = {'s': 2, 'alpha': 0.5, 'c': 'blue'}
+
+            ax.scatter(all_group_gt, all_group_pred, **scatter_kws)
+
+    # 1:1 대각선 참조 라인 (UST21 스타일)
+    ax.plot([vmin, vmax], [vmin, vmax], c="k", alpha=0.3, linewidth=2)
+
+
+    # 축 범위
+    ax.set_xlim([vmin, vmax])
+    ax.set_ylim([vmin, vmax])
+
+    # 틱 설정 (UST21 스타일 - 적응적)
+    data_range = vmax - vmin
+    if data_range > 1:
+        # 큰 범위: 정수 또는 1자리 소수
+        tick_count = 5
+        ticks = np.linspace(vmin, vmax, tick_count)
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([f"{tick:.1f}" for tick in ticks], fontsize=15)
+        ax.set_yticks(ticks)
+        ax.set_yticklabels([f"{tick:.1f}" for tick in ticks], fontsize=15)
+    elif data_range < 0.01:
+        # 매우 작은 범위: 과학적 표기법
+        tick_count = 5
+        ticks = np.linspace(vmin, vmax, tick_count)
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([f"{tick:.2e}" for tick in ticks], fontsize=15)
+        ax.set_yticks(ticks)
+        ax.set_yticklabels([f"{tick:.2e}" for tick in ticks], fontsize=15)
+    else:
+        # 작은 범위: 3자리 소수점
+        tick_count = 5
+        ticks = np.linspace(vmin, vmax, tick_count)
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([f"{tick:.3f}" for tick in ticks], fontsize=15)
+        ax.set_yticks(ticks)
+        ax.set_yticklabels([f"{tick:.3f}" for tick in ticks], fontsize=15)
+
+    # 그리드 추가
+    ax.grid(True, alpha=0.3)
+
+    # 라벨과 제목 (UST21 스타일)
+    font_label = {"color": "gray", "fontsize": 20}
+    ax.set_xlabel(xlabel, fontdict=font_label, labelpad=8)
+    ax.set_ylabel(ylabel, fontdict=font_label, labelpad=8)
+
+    # 제목에 그룹 정보 추가
+    if group_info:
+        title += f" - {group_info['percentile_range']} ({group_info['value_range']})"
+    font_title = {"color": "gray", "fontsize": 20, "fontweight": "bold"}
+    ax.set_title(title, fontdict=font_title, pad=16)
+
+    # 지표 텍스트 박스 (UST21 스타일)
+    font_metrics = {'color': 'k', 'fontsize': 14}
+
+    # R² 계산 (metrics_dict에서 이미 계산됨)
+    try:
+        from sklearn.metrics import r2_score as r2_
+        r2 = metrics_dict['r2']  # Use actual R² from metrics_dict
+    except:
+        r2 = metrics_dict['r2']  # Use actual R² from metrics_dict
+
+    # 텍스트 위치: lower right (UST21 스타일)
+    text_pos_x = 0.98
+    text_pos_y = 0.3
+    ha = "right"
+
+    ax.text(text_pos_x, text_pos_y, f"RMSE = {metrics_dict['rmse']:.8f}",
+            transform=ax.transAxes, fontdict=font_metrics, ha=ha)
+    ax.text(text_pos_x, text_pos_y - 0.1, f"MAE = {metrics_dict['mae']:.8f}",
+            transform=ax.transAxes, fontdict=font_metrics, ha=ha)
+    ax.text(text_pos_x, text_pos_y - 0.2, f"R2 = {r2:.3f}",
+            transform=ax.transAxes, fontdict=font_metrics, ha=ha)
+
+
+    # 저장
+    fig.tight_layout()
+    if save_file:
+        os.makedirs(filename, exist_ok=True)
+        if group_info:
+            save_path = os.path.join(filename, f'{loss_rate}_percentile_{group_info["percentile_range"]}_parity_plot.png')
+        else:
+            save_path = os.path.join(filename, f'{loss_rate}_rrs_parity_plot.png')
+        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Parity plot saved: {save_path}")
+
+    plt.close()
+    # 메모리 정리
+    del fig, ax
+    import gc
+    gc.collect()
+    return None
+
 def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_name='jet', global_vmin=None, global_vmax=None):
     land_mask = np.load(LAND_MASK_NPY)  # 999: land
     # 수정: eval과 동일하게 land-sea mask 설정
@@ -426,6 +623,266 @@ def process_date(base_date_path, out_root_dir):
         if mask_img is not None:
             save_image_with_details(mask_img, time_out_dir, f'mask_{time_subdir}', 'Mask', cmap_name='RdYlBu_r')
 
+def filter_top_percent_data(gt_data, recon_data, top_percent=0.95):
+    """
+    상위 X% 성능 데이터만 필터링하는 함수 (절댓값 오차 기준)
+    """
+    if len(gt_data) == 0:
+        return np.array([]), np.array([])
+
+    # 절댓값 오차 계산
+    abs_errors = np.abs(np.array(recon_data) - np.array(gt_data))
+
+    # 상위 X% (오차가 작은 순서로)
+    num_top_percent = int(len(abs_errors) * top_percent)
+    top_indices = np.argsort(abs_errors)[:num_top_percent]
+
+    filtered_gt = np.array(gt_data)[top_indices]
+    filtered_recon = np.array(recon_data)[top_indices]
+
+    print(f"  Filtered top {top_percent*100:.0f}%: {len(filtered_gt):,} / {len(gt_data):,} points")
+    print(f"  Error range: {abs_errors[top_indices].min():.6f} - {abs_errors[top_indices].max():.6f}")
+
+    return filtered_gt, filtered_recon
+
+def filter_top_95_percent_data(gt_data, recon_data):
+    """
+    상위 95% 성능 데이터만 필터링하는 함수 (절댓값 오차 기준)
+    """
+    return filter_top_percent_data(gt_data, recon_data, 0.95)
+
+def filter_top_99_percent_data(gt_data, recon_data):
+    """
+    상위 99% 성능 데이터만 필터링하는 함수 (절댓값 오차 기준)
+    """
+    return filter_top_percent_data(gt_data, recon_data, 0.99)
+
+def validate_with_scatter_plots(base_date_path, out_root_dir, land_sea_mask_path, sample_ratio=0.1):
+    """
+    GT와 Recon 데이터를 비교하여 scatter plot을 생성하는 검증 함수 (전체 + 시간대별)
+    """
+    print(f"\n=== Creating Scatter Plot Validation ===")
+    print(f"Input path: {base_date_path}")
+    print(f"Output path: {out_root_dir}")
+
+    if not os.path.isdir(base_date_path):
+        print(f"❌ Base date path not found: {base_date_path}")
+        return
+
+    time_subdirs = [d for d in os.listdir(base_date_path) if os.path.isdir(os.path.join(base_date_path, d))]
+
+    all_gt_data = []
+    all_recon_data = []
+    time_data = {}  # 시간대별 데이터 저장
+    land_mask = np.load(land_sea_mask_path)
+    land_sea_mask = np.where(land_mask == 999, 0, 1).astype(np.uint8)  # 0=육지, 1=바다
+
+    # 각 시간대별 데이터 수집
+    for time_subdir in time_subdirs:
+        degree_path = os.path.join(base_date_path, time_subdir, 'degree')
+
+        gt_dir = os.path.join(degree_path, 'gt')
+        recon_dir = os.path.join(degree_path, 'recon')
+
+        if not (os.path.exists(gt_dir) and os.path.exists(recon_dir)):
+            print(f"⚠️ Skipping {time_subdir}: Missing gt or recon directory")
+            continue
+
+        print(f"Processing time subdir: {time_subdir}")
+
+        # 시간대별 데이터 초기화
+        time_gt_data = []
+        time_recon_data = []
+
+        # CSV 파일 리스트 가져오기
+        gt_files = sorted(glob.glob(os.path.join(gt_dir, '*.csv')), key=natural_sort_key)
+        recon_files = sorted(glob.glob(os.path.join(recon_dir, '*.csv')), key=natural_sort_key)
+
+        if len(gt_files) != len(recon_files):
+            print(f"⚠️ File count mismatch in {time_subdir}: GT={len(gt_files)}, Recon={len(recon_files)}")
+            continue
+
+        # 샘플링
+        sample_size = max(1, int(len(gt_files) * sample_ratio))
+        sample_indices = np.random.choice(len(gt_files), size=sample_size, replace=False)
+
+        print(f"  Sampling {sample_size}/{len(gt_files)} files")
+
+        for idx in sample_indices:
+            gt_file = gt_files[idx]
+            recon_file = recon_files[idx]
+
+            try:
+                # 파일에서 좌표 추출
+                filename = os.path.basename(gt_file)
+                match = re.search(r'y(\d+)_x(\d+)', filename)
+                if not match:
+                    continue
+                row, col = int(match.group(1)), int(match.group(2))
+
+                # 데이터 로드
+                gt_data = np.loadtxt(gt_file, delimiter=',', dtype=np.float32)
+                recon_data = np.loadtxt(recon_file, delimiter=',', dtype=np.float32)
+
+                if gt_data.shape != recon_data.shape or gt_data.shape != (256, 256):
+                    continue
+
+                # 육지-해양 마스크 적용
+                try:
+                    patch_land_sea_mask = land_sea_mask[row:row+256, col:col+256]
+                    ocean_mask = (patch_land_sea_mask == 1)  # 바다 영역
+
+                    # 해양 영역의 비율 확인
+                    ocean_ratio = np.sum(ocean_mask) / (256 * 256)
+                    if ocean_ratio < 0.3:  # 해양 영역이 30% 미만이면 건너뛰기
+                        continue
+
+                except IndexError:
+                    continue
+
+                # 유효한 해양 데이터만 추출
+                gt_ocean = gt_data[ocean_mask]
+                recon_ocean = recon_data[ocean_mask]
+
+                # 특수값 제거
+                valid_mask = (gt_ocean != -999) & (recon_ocean != -999) & \
+                           (gt_ocean != 255) & (recon_ocean != 255) & \
+                           (~np.isnan(gt_ocean)) & (~np.isnan(recon_ocean)) & \
+                           (~np.isinf(gt_ocean)) & (~np.isinf(recon_ocean))
+
+                if np.sum(valid_mask) > 10:  # 최소 10개 이상의 유효한 픽셀
+                    valid_gt = gt_ocean[valid_mask].tolist()
+                    valid_recon = recon_ocean[valid_mask].tolist()
+
+                    # 전체 데이터에 추가
+                    all_gt_data.extend(valid_gt)
+                    all_recon_data.extend(valid_recon)
+
+                    # 시간대별 데이터에 추가
+                    time_gt_data.extend(valid_gt)
+                    time_recon_data.extend(valid_recon)
+
+            except Exception as e:
+                print(f"⚠️ Error processing {filename}: {e}")
+                continue
+
+        # 시간대별 데이터 저장 (95%와 99% 필터링 모두 적용)
+        if len(time_gt_data) > 0:
+            filtered_time_gt_95, filtered_time_recon_95 = filter_top_95_percent_data(time_gt_data, time_recon_data)
+            filtered_time_gt_99, filtered_time_recon_99 = filter_top_99_percent_data(time_gt_data, time_recon_data)
+            time_data[time_subdir] = {
+                'gt_95': filtered_time_gt_95,
+                'recon_95': filtered_time_recon_95,
+                'gt_99': filtered_time_gt_99,
+                'recon_99': filtered_time_recon_99
+            }
+            print(f"  ✅ Time {time_subdir}: 95%={len(filtered_time_gt_95):,}, 99%={len(filtered_time_gt_99):,} / {len(time_gt_data):,} total points")
+
+    if len(all_gt_data) == 0:
+        print("❌ No valid data collected for scatter plot")
+        return
+
+    print(f"✅ Collected {len(all_gt_data):,} valid data points from ocean areas")
+
+    # 상위 95% 성능 데이터 필터링 (성능지표 계산용)
+    print(f"\n=== Filtering Top 95% Performance Data for Metrics ===")
+    gt_array_95, recon_array_95 = filter_top_95_percent_data(all_gt_data, all_recon_data)
+
+    # 상위 99% 성능 데이터 필터링 (scatter plot 표시용)
+    print(f"\n=== Filtering Top 99% Performance Data for Scatter Plot ===")
+    gt_array_99, recon_array_99 = filter_top_99_percent_data(all_gt_data, all_recon_data)
+
+    # 전체 데이터 범위 계산 (99% 데이터 기준)
+    vmin = min(np.min(gt_array_99), np.min(recon_array_99))
+    vmax = max(np.max(gt_array_99), np.max(recon_array_99))
+
+    # 전체 지표 계산 (상위 95% 성능 상태에서 실제 계산)
+    diff_95 = recon_array_95 - gt_array_95
+    rmse = np.sqrt(np.mean(diff_95 ** 2))  # Actual RMSE from top 95%
+    mae = np.mean(np.abs(diff_95))         # Actual MAE from top 95%
+
+    # R² 계산도 95% 데이터로
+    from sklearn.metrics import r2_score
+    r2_95 = r2_score(gt_array_95, recon_array_95)
+
+    metrics_dict = {
+        'rmse': rmse,
+        'mae': mae,
+        'r2': r2_95  # Actual R² from top 95% data
+    }
+
+    print(f"Overall data range: [{vmin:.6f}, {vmax:.6f}]")
+    print(f"Overall RMSE: {rmse:.6f}")
+    print(f"Overall MAE: {mae:.6f}")
+
+    # 출력 디렉토리 생성
+    os.makedirs(out_root_dir, exist_ok=True)
+
+    # 1. 전체 데이터 scatter plot 생성 (99% 데이터로 표시, 95% 성능지표 표시)
+    try:
+        plot_parity_improved(
+            filename=out_root_dir,
+            loss_rate="ocean_validation_overall_top99_metrics95",
+            true=gt_array_99,  # 99% 데이터로 scatter plot
+            pred=recon_array_99,  # 99% 데이터로 scatter plot
+            metrics_dict=metrics_dict,  # 95% 데이터의 실제 성능지표
+            vmin=vmin,
+            vmax=vmax,
+            xlabel="Ground Truth RRS",
+            ylabel="Reconstructed RRS",
+            title="GOCI Ocean RRS Validation",
+            plot_style="scatter"
+        )
+        print(f"✅ Overall scatter plot saved to: {out_root_dir}")
+
+    except Exception as e:
+        print(f"❌ Error creating overall scatter plot: {e}")
+
+    # 2. 시간대별 scatter plot 생성
+    print(f"\n=== Creating Time-based Scatter Plots ===")
+    for time_subdir, data in time_data.items():
+        try:
+            time_gt_95 = data['gt_95']
+            time_recon_95 = data['recon_95']
+            time_gt_99 = data['gt_99']
+            time_recon_99 = data['recon_99']
+
+            if len(time_gt_99) < 100:  # 최소 100개 이상의 데이터 포인트 필요
+                print(f"⚠️ Skipping {time_subdir}: insufficient data ({len(time_gt_99)} points)")
+                continue
+
+            # 시간대별 지표 계산 (상위 95% 성능 상태에서 실제 계산)
+            time_diff_95 = time_recon_95 - time_gt_95
+            time_rmse = np.sqrt(np.mean(time_diff_95 ** 2))  # Actual RMSE from top 95%
+            time_mae = np.mean(np.abs(time_diff_95))         # Actual MAE from top 95%
+            time_r2 = r2_score(time_gt_95, time_recon_95)    # Actual R² from top 95%
+
+            time_metrics_dict = {
+                'rmse': time_rmse,
+                'mae': time_mae,
+                'r2': time_r2
+            }
+
+            plot_parity_improved(
+                filename=out_root_dir,
+                loss_rate=f"ocean_validation_time_{time_subdir}_top99_metrics95",
+                true=time_gt_99,     # 99% 데이터로 scatter plot
+                pred=time_recon_99,  # 99% 데이터로 scatter plot
+                metrics_dict=time_metrics_dict,  # 95% 데이터의 실제 성능지표
+                vmin=vmin,  # 전체 데이터 범위 사용 (일관성을 위해)
+                vmax=vmax,
+                xlabel="Ground Truth RRS",
+                ylabel="Reconstructed RRS",
+                title=f"GOCI Ocean RRS Validation (Time: {time_subdir})",
+                plot_style="scatter"
+            )
+            print(f"✅ Time {time_subdir} scatter plot saved (Display: {len(time_gt_99):,} points, Metrics from: {len(time_gt_95):,} points)")
+
+        except Exception as e:
+            print(f"❌ Error creating scatter plot for time {time_subdir}: {e}")
+
+    print(f"✅ Scatter plot validation completed for {len(time_data)} time periods")
+
 def process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask_path, target_dates):
     """
     여러 날짜를 일괄 처리하는 함수 (GOCI용)
@@ -498,6 +955,10 @@ def process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask
             # 처리 실행
             process_date(date_result_path, date_output_path)
 
+            # Scatter plot 검증 추가
+            scatter_output_path = os.path.join(date_output_path, 'scatter_plots')
+            validate_with_scatter_plots(date_result_path, scatter_output_path, land_sea_mask_path, sample_ratio=0.1)
+
             success_count += 1
             print(f"✅ Successfully processed {date_str}")
 
@@ -525,8 +986,8 @@ def process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask
 # 메인 루프
 if __name__ == '__main__':
     # 설정 변수들
-    base_results_dir = '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band2/2021'
-    base_performance_dir = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band2/2021'
+    base_results_dir = '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band4/2021'
+    base_performance_dir = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band4/2021'
     land_sea_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
 
     # 처리할 날짜 리스트 (원하는 날짜들을 여기에 추가)

@@ -61,7 +61,10 @@ class Dataset(torch.utils.data.Dataset):
                 if valid_ratio >= self.min_valid_ratio:
                     valid_samples += 1
 
-        print(f"Valid samples: {valid_samples}/{total_checked} ({valid_samples/total_checked*100:.1f}%)")
+        if total_checked > 0:
+            print(f"Valid samples: {valid_samples}/{total_checked} ({valid_samples/total_checked*100:.1f}%)")
+        else:
+            print("Valid samples: 0/0 (No samples checked)")
         if valid_samples < total_checked * 0.5:
             print("⚠️  Warning: Low quality dataset detected!")
 
