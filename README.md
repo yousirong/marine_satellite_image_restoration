@@ -73,4 +73,13 @@ python /home/juneyonglee/Desktop/AY_ust/model/eval/eval_goci_fullpatch.py
 
 python -m model.run --c configs/val.yaml --val
 python /home/juneyonglee/Desktop/AY_ust/performance/val_goci_fullpatch.py
+
+
+
+python3 daily_averaging.py \
+    --oc3_dir myhdd/GOCI_RRS/oc3_batch_results \
+    --khoa_dir My_Book/UST21/01_day/2021/01 \
+    --output_dir daily_results \
+    --ust_land_mask preprocessing/Land_mask/Land_mask.npy \
+    --date 20210101
 ```
