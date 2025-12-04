@@ -756,19 +756,67 @@ def process_multiple_dates(base_results_dir, base_performance_dir, land_mask_pat
     if success_count > 0:
         print(f"\nResults saved to: {base_performance_dir}")
 
-if __name__ == '__main__':
-    # 설정 변수들
-    base_results_dir = '/home/juneyonglee/Desktop/AY_ust/My_Book/results/2020'
-    base_performance_dir = '/home/juneyonglee/Desktop/AY_ust/My_Book/performance/2020'
-    land_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.mat'
+def generate_date_range(start_date: str, end_date: str):
+    """
+    시작 날짜부터 종료 날짜까지의 모든 날짜를 생성하는 함수
 
-    # 처리할 날짜 리스트 (원하는 날짜들을 여기에 추가)
-    target_dates = ['20201201', '20201208','20201215','20201222','20201229','20201231']
+    Args:
+        start_date: 시작 날짜 (YYYYMMDD 형식)
+        end_date: 종료 날짜 (YYYYMMDD 형식)
+
+    Returns:
+        생성된 날짜 리스트
+    """
+    from datetime import datetime, timedelta
+
+    start = datetime.strptime(start_date, '%Y%m%d')
+    end = datetime.strptime(end_date, '%Y%m%d')
+
+    dates = []
+    current = start
+    while current <= end:
+        dates.append(current.strftime('%Y%m%d'))
+        current += timedelta(days=1)
+
+    return dates
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Process UST21 validation for multiple dates')
+    parser.add_argument('--base_results_dir', type=str,
+                       default='/home/juneyonglee/Desktop/AY_ust/myhdd/UST21/results/2020',
+                       help='Base results directory')
+    parser.add_argument('--base_performance_dir', type=str,
+                       default='/home/juneyonglee/Desktop/AY_ust/myhdd/UST21/performance/2020',
+                       help='Base performance output directory')
+    parser.add_argument('--land_mask_path', type=str,
+                       default='/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.mat',
+                       help='Land mask file path')
+    parser.add_argument('--dates', type=str, nargs='+',
+                       help='Individual dates to process (YYYYMMDD format)')
+    parser.add_argument('--start_date', type=str,
+                       help='Start date for range processing (YYYYMMDD format)')
+    parser.add_argument('--end_date', type=str,
+                       help='End date for range processing (YYYYMMDD format)')
+
+    args = parser.parse_args()
+
+    # 날짜 리스트 결정
+    if args.start_date and args.end_date:
+        # 날짜 범위로 처리
+        print(f"Generating dates from {args.start_date} to {args.end_date}...")
+        target_dates = generate_date_range(args.start_date, args.end_date)
+        print(f"Generated {len(target_dates)} dates")
+    elif args.dates:
+        # 특정 날짜들로 처리
+        target_dates = args.dates
+        print(f"Processing specific dates: {target_dates}")
+    else:
+        # 기본값 사용
+        target_dates = ['20201201', '20201208','20201215','20201222','20201229','20201231']
+        print(f"Using default dates: {target_dates}")
 
     # 여러 날짜 일괄 처리
-    process_multiple_dates(base_results_dir, base_performance_dir, land_mask_path, target_dates)
-
-    # 단일 날짜 처리 예시 (주석 처리됨)
-    # single_date_result = '/home/juneyonglee/Desktop/AY_ust/My_Book/results/2020/20201229/degree'
-    # single_date_output = '/home/juneyonglee/Desktop/AY_ust/My_Book/performance/2020/20201229'
-    # process_all_data_types(single_date_result, land_mask_path, single_date_output)
+    process_multiple_dates(args.base_results_dir, args.base_performance_dir,
+                          args.land_mask_path, target_dates)

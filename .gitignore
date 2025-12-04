@@ -22,3 +22,4 @@ Notebook/land_sea_mask.npy
 *.log
 preprocessing_goci_rrs_43to45.log
 daily_results
+differencemap/results

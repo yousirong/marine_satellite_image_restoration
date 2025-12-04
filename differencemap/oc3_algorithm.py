@@ -62,19 +62,19 @@ class OC3Processor:
 
     def load_band_data(self, band_path: Path, date: str, time: str, tile_id: str) -> Optional[np.ndarray]:
         """
-        Load band data from CSV file
+        Load band data from CSV file in recon directory
 
         Args:
             band_path: Path to band directory
             date: Date in YYYYMMDD format
             time: Time in HHMMSS format
-            tile_id: Tile identifier (e.g., mask_100_y1024_x2816)
+            tile_id: Tile identifier (e.g., img_504_y5429_x4864)
 
         Returns:
             Numpy array of band data or None if file not found
         """
         year = date[:4]
-        csv_path = band_path / year / date / time / 'degree' / 'mask' / f'{tile_id}.csv'
+        csv_path = band_path / year / date / time / 'degree' / 'recon' / f'{tile_id}.csv'
 
         if not csv_path.exists():
             logger.warning(f"File not found: {csv_path}")
@@ -205,7 +205,7 @@ class OC3Processor:
 
     def get_available_tiles(self, date: str, time: str) -> List[str]:
         """
-        Get list of available tiles for given date and time
+        Get list of available tiles for given date and time from recon directory
 
         Args:
             date: Date in YYYYMMDD format
@@ -215,14 +215,14 @@ class OC3Processor:
             List of available tile IDs
         """
         year = date[:4]
-        mask_dir = self.band_dirs['band2'] / year / date / time / 'degree' / 'mask'
+        recon_dir = self.band_dirs['band2'] / year / date / time / 'degree' / 'recon'
 
-        if not mask_dir.exists():
-            logger.warning(f"Mask directory not found: {mask_dir}")
+        if not recon_dir.exists():
+            logger.warning(f"Recon directory not found: {recon_dir}")
             return []
 
-        # Find all CSV files in mask directory
-        csv_files = list(mask_dir.glob('*.csv'))
+        # Find all CSV files in recon directory
+        csv_files = list(recon_dir.glob('*.csv'))
         tile_ids = [f.stem for f in csv_files]
 
         logger.info(f"Found {len(tile_ids)} tiles for {date} {time}")

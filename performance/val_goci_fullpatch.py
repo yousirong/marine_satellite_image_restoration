@@ -10,8 +10,8 @@ from matplotlib.colors import Normalize
 
 # ================== 설정 ==================
 # 기본 경로 설정
-BASE_RESULTS_DIR = '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band2/2021'
-BASE_PERFORMANCE_DIR = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band2/2021'
+BASE_RESULTS_DIR = '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band3/2021'
+BASE_PERFORMANCE_DIR = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band3/2021'
 
 # 고정 설정
 LAND_MASK_NPY = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
@@ -157,6 +157,21 @@ def load_full_image_from_patches(patch_dir):
         except Exception as e:
             print(f"[ERROR] Failed to load {fpath}: {e}")
             continue
+
+        # 패치가 모두 동일한 값으로 채워져 있는지 확인 (중앙값/중간값으로 채워진 빈 패치)
+        unique_vals = np.unique(arr)
+        if len(unique_vals) == 1:
+            # 모든 값이 동일하면 빈 패치로 간주하고 0으로 채움
+            arr = np.zeros_like(arr)
+            print(f"[INFO] Empty patch detected (all values = {unique_vals[0]}), filled with 0: {os.path.basename(fpath)}")
+        elif len(unique_vals) == 2:
+            # 값이 2개뿐인 경우: 0과 다른 하나의 값
+            # 0이 아닌 값이 1이면 제외 (유효한 데이터)
+            non_zero_vals = unique_vals[unique_vals != 0]
+            if len(non_zero_vals) == 1 and non_zero_vals[0] != 1:
+                # 해양 영역이 1이 아닌 하나의 값으로만 채워져 있음 (중앙값/중간값)
+                arr[arr != 0] = 0
+                print(f"[INFO] Mixed patch detected (land + ocean with single value = {non_zero_vals[0]}), ocean filled with 0: {os.path.basename(fpath)}")
 
         m = re.search(r'y(\d+)_x(\d+)', os.path.basename(fpath))
         if not m:
@@ -435,7 +450,8 @@ def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_nam
                 vmin, vmax = 0, 1
             else:
                 # Use percentile-based range for both GT and recon to ensure same colorbar scale
-                vmin = np.percentile(valid_data, 1)
+                # vmin을 0으로 설정하여 invalid data를 파란색으로 표시
+                vmin = 0
                 vmax = np.percentile(valid_data, 99)
                 print(f"[{file_prefix.upper()}] Using calculated range [{vmin:.6f}, {vmax:.6f}]")
                 print(f"[{file_prefix.upper()}] Valid pixels: {valid_data.size}, Range: [{np.min(valid_data):.6f}, {np.max(valid_data):.6f}]")
@@ -448,10 +464,11 @@ def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_nam
         # For both GT and recon, use the original data without normalization
         display_img = full_img.copy()
 
-    # Set invalid pixels to vmin for proper clipping (but not for masks)
+    # Set invalid pixels to 0 for proper clipping (but not for masks)
+    # This ensures invalid data is colored as the minimum value (blue in jet colormap)
     if not 'mask' in file_prefix:
         all_invalid_mask = invalid_data_mask | land_bool
-        display_img[all_invalid_mask] = vmin
+        display_img[all_invalid_mask] = 0
 
     # Clip and colorize
     clipped = np.clip(display_img, vmin, vmax)
@@ -459,9 +476,11 @@ def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_nam
 
     # Apply final masks for visualization
     if 'mask' in file_prefix:
-        # For masks, create completely custom colors for 3 categories
-        # First initialize as black
+        # For masks, create completely custom colors for 4 categories
+        # First initialize as blue (no mask data) - jet colormap minimum
         colored = np.zeros((display_img.shape[0], display_img.shape[1], 3), dtype=np.float32)
+        jet_blue = convert_raw_to_color(np.array([[0.0]]), 0, 1, cmap_name='jet')[0, 0]
+        colored[:] = jet_blue  # Initialize all pixels to blue (no mask data)
 
         # Missing ocean pixels only = red (eval과 동일 로직)
         missing_ocean_only = (display_img == 0.0) & ocean_bool  # 해양 영역의 결측치만
@@ -476,6 +495,11 @@ def save_image_with_details(full_img, out_dir, file_prefix, label_text, cmap_nam
         # All land pixels = black (regardless of missing status)
         colored[land_bool] = [0.0, 0.0, 0.0]  # Black
         print(f"[DEBUG] All land pixels set to black: {np.sum(land_bool)}")
+
+        # 마스크가 없는 해양 영역(중간값)을 파란색으로 변경
+        no_mask_ocean = ocean_bool & (display_img != 0.0) & (display_img != 1.0)
+        colored[no_mask_ocean] = jet_blue  # No mask data = blue
+        print(f"[DEBUG] No mask ocean pixels set to blue: {np.sum(no_mask_ocean)}")
 
     else:
         colored[land_bool] = [0.0, 0.0, 0.0]  # Land = black
@@ -558,10 +582,13 @@ def process_and_average(image_list, data_type='default'):
         # Use safe division to avoid warnings
         with np.errstate(divide='ignore', invalid='ignore'):
             averaged_img = np.where(sum_valid > 0, sum_ones / sum_valid, 0)
+
+        # 빈 패치(모든 값이 동일한 경우)를 0으로 채움
+        averaged_img = np.where(averaged_img == 1.0, 0.0, averaged_img)
     else:
-        # For GT and recon data, use mean of valid pixels
+        # For GT and recon data, use mean of valid pixels, but fill empty patches with 0
         averaged_img = np.ma.mean(masked_stacked_images, axis=0)
-        averaged_img = averaged_img.filled(0)  # Fill masked values with 0
+        averaged_img = averaged_img.filled(0)  # Fill all masked values (including empty patches) with 0
 
     # Print statistics for debugging
     non_zero = averaged_img[averaged_img != 0]
@@ -985,16 +1012,26 @@ def process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask
 
 # 메인 루프
 if __name__ == '__main__':
-    # 설정 변수들
-    base_results_dir = '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band4/2021'
-    base_performance_dir = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band4/2021'
+    # 처리할 밴드 리스트 (band2, band3, band4)
+    bands = ['band2', 'band3', 'band4']
+
+    # 공통 설정
     land_sea_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
 
     # 처리할 날짜 리스트 (원하는 날짜들을 여기에 추가)
     target_dates = ['20210101', '20210108','20210115','20210122','20210129']
 
-    # 선택한 날짜들만 처리
-    process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask_path, target_dates)
+    # 각 밴드별로 처리
+    for band in bands:
+        print(f"\n{'='*80}")
+        print(f"Processing {band.upper()}")
+        print(f"{'='*80}\n")
+
+        base_results_dir = f'/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/{band}/2021'
+        base_performance_dir = f'/home/juneyonglee/myhdd/GOCI_RRS/performance/{band}/2021'
+
+        # 선택한 날짜들만 처리
+        process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask_path, target_dates)
 
     # === 기존 자동 탐색 방식 (주석 처리됨) ===
     # print("="*60)

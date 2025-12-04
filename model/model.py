@@ -209,9 +209,9 @@ class RFRNetModel():
                     continue
 
                 # ===== 실제 데이터 분포에 맞춘 전처리 =====
-                # 1. GT 이미지 전처리 (적응적 채우기 방식 사용)
+                # 1. GT 이미지 전처리 (결측값을 0으로 채우기)
                 gt_processed, gt_valid_mask = self.preprocess_rrs_data(
-                    gt_images, mode='adaptive_fill'
+                    gt_images, mode='zero_fill'
                 )
 
                 # 2. 마스크 이진화
@@ -477,7 +477,7 @@ class RFRNetModel():
 
                     # ===== 테스트용 전처리 (훈련과 동일) =====
                     gt_processed, gt_valid_mask = self.preprocess_rrs_data(
-                        gt_images, mode='adaptive_fill'
+                        gt_images, mode='zero_fill'
                     )
 
                     # 마스크 이진화

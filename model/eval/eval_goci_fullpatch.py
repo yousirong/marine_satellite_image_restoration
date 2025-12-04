@@ -299,14 +299,14 @@ class GOCIEvalDataset(Dataset):
                 if img_for_mask.shape[0] != self.patch_size or img_for_mask.shape[1] != self.patch_size:
                     img_for_mask = cv2.resize(img_for_mask, (self.patch_size, self.patch_size))
                 img_for_mask = np.transpose(img_for_mask, (2, 0, 1))  # (H,W,C) -> (C,H,W)
-                
+
                 # 해양 영역에서만 결측치를 처리하도록 수정
                 land_mask_2d = land_sea_mask_patch[0]  # 0=land, 1=sea
-                
+
                 # 원본 결측값 마스크 먼저 생성 (1=hole, 0=valid)
                 # -999, NaN, 0, 1000값을 모두 결측값으로 처리
                 hole_mask = ((img_for_mask == self.missing_value) | np.isnan(img_for_mask) | (img_for_mask == 0) | (img_for_mask == 1000)).astype(np.uint8)
-                
+
                 # 해양 영역에서만 결측치를 유지하고, 육지 영역의 결측치는 제거
                 for c in range(3):
                     # 육지 영역(land_mask_2d == 0)의 결측치를 유효값으로 변경
@@ -320,7 +320,7 @@ class GOCIEvalDataset(Dataset):
                 print(f"  - Zero count: {np.sum(img_for_mask == 0)}")
                 print(f"  - 1000 count (GT invalid): {np.sum(img_for_mask == 1000)}")
                 print(f"  - Hole mask sum: {hole_mask.sum()}")  # 실제 hole 개수
-                
+
                 # 육지/해양 구분 디버깅
                 land_mask_2d = land_sea_mask_patch[0]  # 0=land, 1=sea
                 land_holes = np.sum(hole_mask[0] & (land_mask_2d == 0))  # 육지 위 hole
@@ -349,7 +349,7 @@ class GOCIEvalDataset(Dataset):
                     print(f"  - SKIP: Ocean ratio {ocean_ratio:.1%} < {self.min_ocean_ratio:.1%} in {os.path.basename(path)}")
                     return self.create_passthrough_sample(img_filled, path, verbose=False)
 
-                # 해양 영역에서 실제 결측 부분 계산  
+                # 해양 영역에서 실제 결측 부분 계산
                 ocean_holes = (land_removed_mask[0] == 0) & (sea_mask[0] == 1)  # 0=hole, 1=valid
                 ocean_hole_count = ocean_holes.sum()
                 ocean_hole_ratio = ocean_hole_count / total_ocean
@@ -369,19 +369,19 @@ class GOCIEvalDataset(Dataset):
                 # 9. model.py와 동일한 전처리 적용
                 # img_filled를 torch tensor로 변환 (채널 순서 변경 전에)
                 img_filled_torch = torch.from_numpy(img_filled.astype(np.float32))
-                
+
                 # RRS 데이터 전처리 (model.py와 동일)
                 gt_processed, gt_valid_mask = self.preprocess_rrs_data_like_model(img_filled_torch)
-                
-                # 스마트 정규화 (model.py와 동일)  
+
+                # 스마트 정규화 (model.py와 동일)
                 gt_normalized, data_min, data_max = self.smart_normalize_like_model(gt_processed, gt_valid_mask)
-                
+
                 # 마스크를 0-1 범위로 정규화
                 mask_normalized = torch.from_numpy(land_removed_mask.astype(np.float32))
                 mask_normalized = (mask_normalized > 0).float()
-                
+
                 print(f"   Preprocessing applied: range [{gt_normalized.min():.3f}, {gt_normalized.max():.3f}]")
-                
+
                 return gt_normalized, mask_normalized, os.path.basename(path)
 
         except Exception as e:
@@ -418,11 +418,11 @@ class GOCIEvalDataset(Dataset):
 
         # model.py와 동일한 전처리 적용
         img_tensor = torch.from_numpy(img_filled.astype(np.float32))
-        
+
         # RRS 데이터 전처리 (model.py와 동일)
         gt_processed, gt_valid_mask = self.preprocess_rrs_data_like_model(img_tensor)
-        
-        # 스마트 정규화 (model.py와 동일)  
+
+        # 스마트 정규화 (model.py와 동일)
         gt_normalized, data_min, data_max = self.smart_normalize_like_model(gt_processed, gt_valid_mask)
 
         # 마스크는 모두 유효(1)로 설정 - 복원할 부분이 없음을 의미
@@ -432,13 +432,12 @@ class GOCIEvalDataset(Dataset):
         if verbose:
             print(f"  -> GT passthrough for {os.path.basename(path)}: no reconstruction needed")
             print(f"     Applied model preprocessing: range [{gt_normalized.min():.3f}, {gt_normalized.max():.3f}]")
-        
+
         return gt_normalized, mask_tensor, os.path.basename(path)
 
     def simple_fill_missing(self, img):
         """
-        간단한 결측값 채우기 (테스트용) - -999, NaN, 0값을 모두 결측값으로 처리하여 복원
-        다양성을 위해 약간의 노이즈 추가
+        간단한 결측값 채우기 (테스트용) - -999, NaN, 0값을 모두 결측값으로 처리하여 0으로 복원
         """
         for c in range(img.shape[2]):
             channel = img[:, :, c]
@@ -446,28 +445,8 @@ class GOCIEvalDataset(Dataset):
             missing_mask = (channel == self.missing_value) | np.isnan(channel) | (channel == 0)
 
             if missing_mask.sum() > 0:
-                valid_values = channel[~missing_mask]
-
-                if len(valid_values) > 0:
-                    # 유효한 값의 분포를 고려한 채우기
-                    if len(valid_values) >= 5:
-                        # 충분한 데이터가 있으면 25-75 percentile 범위에서 랜덤 채우기
-                        q25 = np.percentile(valid_values, 25)
-                        q75 = np.percentile(valid_values, 75)
-                        if q75 > q25:
-                            fill_values = np.random.uniform(q25, q75, missing_mask.sum())
-                        else:
-                            fill_values = np.full(missing_mask.sum(), np.median(valid_values))
-                    else:
-                        # 데이터가 적으면 median으로 채우되 약간의 노이즈 추가
-                        median_val = np.median(valid_values)
-                        noise = np.random.normal(0, abs(median_val) * 0.1, missing_mask.sum())
-                        fill_values = median_val + noise
-                    
-                    channel[missing_mask] = fill_values
-                else:
-                    # 유효한 값이 없으면 작은 양수값으로 설정
-                    channel[missing_mask] = 0.001
+                # 결측값을 모두 0으로 채우기
+                channel[missing_mask] = 0
 
         return img
 
@@ -488,40 +467,13 @@ class GOCIEvalDataset(Dataset):
         invalid_mask = missing_mask | extreme_mask
 
         if mode == 'adaptive_fill':
-            # 배치별, 채널별 적응적 채우기
+            # 배치별, 채널별 적응적 채우기 - 모든 결측값을 0으로 설정
             for c in range(data.size(0)):  # eval에서는 채널이 첫 번째 차원
                 channel_data = processed_data[c]
                 channel_invalid = invalid_mask[c]
 
-                # 유효한 값들만 추출
-                valid_values = channel_data[~channel_invalid]
-
-                if len(valid_values) > 0:
-                    # 유효한 값들의 분포 분석
-                    valid_sorted = torch.sort(valid_values)[0]
-                    n_valid = len(valid_sorted)
-
-                    if n_valid >= 10:
-                        # 충분한 데이터가 있으면 10~90 percentile 사용
-                        p10_idx = max(0, n_valid // 10)
-                        p90_idx = min(n_valid - 1, (n_valid * 9) // 10)
-                        fill_min = valid_sorted[p10_idx]
-                        fill_max = valid_sorted[p90_idx]
-
-                        # 범위 내에서 랜덤하게 채우기
-                        fill_range = fill_max - fill_min
-                        if fill_range > 0:
-                            random_fill = fill_min + torch.rand_like(channel_data[channel_invalid]) * fill_range
-                        else:
-                            random_fill = torch.full_like(channel_data[channel_invalid], fill_min)
-                        processed_data[c][channel_invalid] = random_fill
-                    else:
-                        # 데이터가 적으면 median으로 채우기
-                        median_value = torch.median(valid_values)
-                        processed_data[c][channel_invalid] = median_value
-                else:
-                    # 모든 값이 무효한 경우 0으로 설정
-                    processed_data[c][channel_invalid] = 0.0
+                # 모든 무효한 값을 0으로 설정
+                processed_data[c][channel_invalid] = 0.0
 
         return processed_data, ~invalid_mask  # 유효한 픽셀 마스크도 반환
 
@@ -558,13 +510,13 @@ class GOCIEvalDataset(Dataset):
     def remove_land_from_mask(self, mask_image, land_sea_mask_patch):
         """
         해양 영역에서만 결측치 마스크를 생성하는 함수
-        mask_image: np.array [3,H,W], 1=hole,0=valid  
+        mask_image: np.array [3,H,W], 1=hole,0=valid
         land_sea_mask_patch: np.array [3,H,W], 1=sea,0=land
 
         반환: np.array [3,H,W], 해양 영역의 결측치만 0(검은색)으로 표시, 나머지는 1(흰색)
         """
         # 1) 1채널로 축소
-        sea = land_sea_mask_patch[0]    # 1=sea, 0=land  
+        sea = land_sea_mask_patch[0]    # 1=sea, 0=land
         hole = mask_image[0]            # 1=hole, 0=valid
 
         # 2) 기본값을 1(흰색)으로 세팅 - 모든 영역을 유효값으로 초기화

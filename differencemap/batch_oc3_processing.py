@@ -44,7 +44,7 @@ class BatchOC3Processor:
 
     def get_available_dates_times(self) -> List[Tuple[str, str]]:
         """
-        Get all available date/time combinations from the data structure
+        Get all available date/time combinations from the data structure (recon directory)
 
         Returns:
             List of (date, time) tuples
@@ -73,9 +73,9 @@ class BatchOC3Processor:
 
                     time = time_dir.name
 
-                    # Check if degree/mask directory exists
-                    mask_dir = time_dir / 'degree' / 'mask'
-                    if mask_dir.exists() and any(mask_dir.glob('*.csv')):
+                    # Check if degree/recon directory exists
+                    recon_dir = time_dir / 'degree' / 'recon'
+                    if recon_dir.exists() and any(recon_dir.glob('*.csv')):
                         date_time_pairs.add((date, time))
 
         date_time_list = sorted(list(date_time_pairs))

@@ -68,18 +68,42 @@ Rrs연구 복원, Chl-a 복원
 
 
 ```bash
+### GOCI
 python -m model.run --c configs/train.yaml
 python /home/juneyonglee/Desktop/AY_ust/model/eval/eval_goci_fullpatch.py
 
 python -m model.run --c configs/val.yaml --val
+1. 날짜 범위로 처리
+
+python /home/juneyonglee/Desktop/AY_ust/model/eval/eval_goci_fullpatch.py
+
 python /home/juneyonglee/Desktop/AY_ust/performance/val_goci_fullpatch.py
 
 
+python3 /home/juneyonglee/Desktop/AY_ust/differencemap/Differencemap_OC3GOCIvsUST21.py \
+  --oc3_dir /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/oc3_batch_results \
+  --khoa_dir /home/juneyonglee/Desktop/AY_ust/My_Book/UST21/01_day/2021/01 \
+  --output_dir /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_differencemap_results \
+  --goci_land_mask /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy \
+  --ust_land_mask /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy \
+  --start_date 20210101 \
+  --end_date 20210131
 
-python3 daily_averaging.py \
-    --oc3_dir myhdd/GOCI_RRS/oc3_batch_results \
-    --khoa_dir My_Book/UST21/01_day/2021/01 \
-    --output_dir daily_results \
-    --ust_land_mask preprocessing/Land_mask/Land_mask.npy \
-    --date 20210101
+
+### UST21
+
+python3 performance/val_ust21_fullpatch.py \
+    --base_results_dir /home/juneyonglee/Desktop/AY_ust/myhdd/UST21/test/2020 \
+    --base_performance_dir /home/juneyonglee/Desktop/AY_ust/myhdd/UST21/performance/2020 \
+    --land_mask_path /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.mat \
+    --start_date 20201201 \
+    --end_date 20201231
+
+python3 differencemap/Differencemap_UST21vsModis.py \
+      --ust21_perf_dir /home/juneyonglee/Desktop/AY_ust/myhdd/UST21/performance/2020 \
+      --modis_dir /home/juneyonglee/Desktop/AY_ust/My_Book/MODIS/MODIS_aqua_8days \
+      --output_dir /home/juneyonglee/Desktop/AY_ust/differencemap/results \
+      --ust_land_mask /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy \
+      --verbose
+
 ```
