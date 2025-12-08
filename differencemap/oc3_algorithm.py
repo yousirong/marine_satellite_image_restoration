@@ -22,19 +22,29 @@ class OC3Processor:
     OC3 Algorithm processor for GOCI satellite data
     """
 
-    def __init__(self, data_root: str):
+    def __init__(self, data_root: str, daily_mode: bool = False):
         """
         Initialize OC3 processor
 
         Args:
             data_root: Root directory containing GOCI band data
+            daily_mode: If True, expects daily-averaged data structure (band2_daily, etc.)
         """
         self.data_root = Path(data_root)
-        self.band_dirs = {
-            'band2': self.data_root / 'band2',
-            'band3': self.data_root / 'band3',
-            'band4': self.data_root / 'band4'
-        }
+        self.daily_mode = daily_mode
+
+        if daily_mode:
+            self.band_dirs = {
+                'band2': self.data_root / 'band2_daily',
+                'band3': self.data_root / 'band3_daily',
+                'band4': self.data_root / 'band4_daily'
+            }
+        else:
+            self.band_dirs = {
+                'band2': self.data_root / 'band2',
+                'band3': self.data_root / 'band3',
+                'band4': self.data_root / 'band4'
+            }
 
         # OC3 coefficients for chlorophyll-a calculation
         # Based on standard OC3 algorithm coefficients
@@ -67,14 +77,20 @@ class OC3Processor:
         Args:
             band_path: Path to band directory
             date: Date in YYYYMMDD format
-            time: Time in HHMMSS format
+            time: Time in HHMMSS format (ignored if daily_mode=True)
             tile_id: Tile identifier (e.g., img_504_y5429_x4864)
 
         Returns:
             Numpy array of band data or None if file not found
         """
         year = date[:4]
-        csv_path = band_path / year / date / time / 'degree' / 'recon' / f'{tile_id}.csv'
+
+        if self.daily_mode:
+            # For daily-averaged data: band_path/year/date/degree/recon/tile_id.csv
+            csv_path = band_path / year / date / 'degree' / 'recon' / f'{tile_id}.csv'
+        else:
+            # For time-based data: band_path/year/date/time/degree/recon/tile_id.csv
+            csv_path = band_path / year / date / time / 'degree' / 'recon' / f'{tile_id}.csv'
 
         if not csv_path.exists():
             logger.warning(f"File not found: {csv_path}")
@@ -84,6 +100,12 @@ class OC3Processor:
             # Load CSV data, skip the row index column
             df = pd.read_csv(csv_path, header=None)
             data = df.iloc[:, 1:].values  # Skip first column (row indices)
+
+            # Normalize data if it's in 0-255 range
+            if data.max() > 1.5:  # If max value > 1.5, assume it's 0-255 range
+                data = data / 255.0
+                logger.debug(f"Normalized data from 0-255 to 0-1 range")
+
             logger.debug(f"Loaded data shape: {data.shape} from {csv_path}")
             return data.astype(np.float32)
         except Exception as e:
@@ -169,6 +191,26 @@ class OC3Processor:
             logger.error(f"Band data shapes don't match for tile {tile_id}")
             return None
 
+        # Apply val_goci_fullpatch.py logic: check for empty/fake patches
+        # Check band2 first (representative)
+        unique_vals = np.unique(band2_data)
+
+        if len(unique_vals) == 1:
+            # All values are identical - empty patch (filled with median/mean)
+            logger.info(f"Empty patch detected in {tile_id} (all values = {unique_vals[0]}), filling with 0")
+            band2_data = np.zeros_like(band2_data)
+            band3_data = np.zeros_like(band3_data)
+            band4_data = np.zeros_like(band4_data)
+        elif len(unique_vals) == 2:
+            # Two values only: 0 and one other value
+            non_zero_vals = unique_vals[unique_vals != 0]
+            if len(non_zero_vals) == 1 and non_zero_vals[0] != 1:
+                # Ocean area filled with single value (median/mean) - fake data
+                logger.info(f"Mixed patch detected in {tile_id} (ocean with single value = {non_zero_vals[0]}), filling ocean with 0")
+                band2_data[band2_data != 0] = 0
+                band3_data[band3_data != 0] = 0
+                band4_data[band4_data != 0] = 0
+
         # Calculate OC3 ratio
         log_ratio = self.calculate_oc3_ratio(band2_data, band3_data, band4_data)
 
@@ -203,19 +245,25 @@ class OC3Processor:
 
         return stats
 
-    def get_available_tiles(self, date: str, time: str) -> List[str]:
+    def get_available_tiles(self, date: str, time: str = None) -> List[str]:
         """
         Get list of available tiles for given date and time from recon directory
 
         Args:
             date: Date in YYYYMMDD format
-            time: Time in HHMMSS format
+            time: Time in HHMMSS format (ignored if daily_mode=True)
 
         Returns:
             List of available tile IDs
         """
         year = date[:4]
-        recon_dir = self.band_dirs['band2'] / year / date / time / 'degree' / 'recon'
+
+        if self.daily_mode:
+            # For daily-averaged data: band2_daily/year/date/degree/recon
+            recon_dir = self.band_dirs['band2'] / year / date / 'degree' / 'recon'
+        else:
+            # For time-based data: band2/year/date/time/degree/recon
+            recon_dir = self.band_dirs['band2'] / year / date / time / 'degree' / 'recon'
 
         if not recon_dir.exists():
             logger.warning(f"Recon directory not found: {recon_dir}")
@@ -225,35 +273,45 @@ class OC3Processor:
         csv_files = list(recon_dir.glob('*.csv'))
         tile_ids = [f.stem for f in csv_files]
 
-        logger.info(f"Found {len(tile_ids)} tiles for {date} {time}")
+        if self.daily_mode:
+            logger.info(f"Found {len(tile_ids)} tiles for {date} (daily-averaged)")
+        else:
+            logger.info(f"Found {len(tile_ids)} tiles for {date} {time}")
         return sorted(tile_ids)
 
-    def process_date_time(self, date: str, time: str, output_dir: Optional[str] = None) -> List[Dict]:
+    def process_date_time(self, date: str, time: str = None, output_dir: Optional[str] = None) -> List[Dict]:
         """
         Process all tiles for a specific date and time
 
         Args:
             date: Date in YYYYMMDD format
-            time: Time in HHMMSS format
+            time: Time in HHMMSS format (ignored if daily_mode=True)
             output_dir: Directory to save results (optional)
 
         Returns:
             List of processing results for each tile
         """
-        logger.info(f"Processing date {date} time {time}")
+        if self.daily_mode:
+            logger.info(f"Processing date {date} (daily-averaged)")
+            time = 'daily'  # Use 'daily' as placeholder for output naming
+        else:
+            logger.info(f"Processing date {date} time {time}")
 
         # Get available tiles
-        tile_ids = self.get_available_tiles(date, time)
+        tile_ids = self.get_available_tiles(date, time if not self.daily_mode else None)
 
         if not tile_ids:
-            logger.error(f"No tiles found for {date} {time}")
+            if self.daily_mode:
+                logger.error(f"No tiles found for {date} (daily-averaged)")
+            else:
+                logger.error(f"No tiles found for {date} {time}")
             return []
 
         results = []
         successful_tiles = 0
 
         for tile_id in tile_ids:
-            result = self.process_single_tile(date, time, tile_id)
+            result = self.process_single_tile(date, time if not self.daily_mode else '', tile_id)
             if result is not None:
                 results.append(result)
                 successful_tiles += 1

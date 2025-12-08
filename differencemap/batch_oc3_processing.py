@@ -28,30 +28,36 @@ class BatchOC3Processor:
     Batch processor for OC3 algorithm across multiple dates and times
     """
 
-    def __init__(self, data_root: str, output_root: str):
+    def __init__(self, data_root: str, output_root: str, daily_mode: bool = False):
         """
         Initialize batch processor
 
         Args:
             data_root: Root directory containing GOCI band data
             output_root: Root directory for output results
+            daily_mode: If True, expects daily-averaged data structure
         """
         self.data_root = Path(data_root)
         self.output_root = Path(output_root)
         self.output_root.mkdir(parents=True, exist_ok=True)
+        self.daily_mode = daily_mode
 
-        self.processor = OC3Processor(str(data_root))
+        self.processor = OC3Processor(str(data_root), daily_mode=daily_mode)
 
     def get_available_dates_times(self) -> List[Tuple[str, str]]:
         """
         Get all available date/time combinations from the data structure (recon directory)
 
         Returns:
-            List of (date, time) tuples
+            List of (date, time) tuples. For daily_mode, time will be 'daily'
         """
         logger.info("Scanning for available dates and times...")
 
-        band2_dir = self.data_root / 'band2'
+        if self.daily_mode:
+            band2_dir = self.data_root / 'band2_daily'
+        else:
+            band2_dir = self.data_root / 'band2'
+
         date_time_pairs = set()
 
         # Scan through years
@@ -66,20 +72,29 @@ class BatchOC3Processor:
 
                 date = date_dir.name
 
-                # Scan through times
-                for time_dir in sorted(date_dir.glob('*')):
-                    if not time_dir.is_dir():
-                        continue
-
-                    time = time_dir.name
-
-                    # Check if degree/recon directory exists
-                    recon_dir = time_dir / 'degree' / 'recon'
+                if self.daily_mode:
+                    # For daily-averaged data: check date/degree/recon directory
+                    recon_dir = date_dir / 'degree' / 'recon'
                     if recon_dir.exists() and any(recon_dir.glob('*.csv')):
-                        date_time_pairs.add((date, time))
+                        date_time_pairs.add((date, 'daily'))
+                else:
+                    # For time-based data: scan through times
+                    for time_dir in sorted(date_dir.glob('*')):
+                        if not time_dir.is_dir():
+                            continue
+
+                        time = time_dir.name
+
+                        # Check if degree/recon directory exists
+                        recon_dir = time_dir / 'degree' / 'recon'
+                        if recon_dir.exists() and any(recon_dir.glob('*.csv')):
+                            date_time_pairs.add((date, time))
 
         date_time_list = sorted(list(date_time_pairs))
-        logger.info(f"Found {len(date_time_list)} date/time combinations")
+        if self.daily_mode:
+            logger.info(f"Found {len(date_time_list)} dates (daily-averaged)")
+        else:
+            logger.info(f"Found {len(date_time_list)} date/time combinations")
 
         return date_time_list
 
@@ -115,20 +130,30 @@ class BatchOC3Processor:
         Process a single date/time combination
 
         Args:
-            date_time: Tuple of (date, time)
+            date_time: Tuple of (date, time). For daily_mode, time will be 'daily'
 
         Returns:
             Processing result dictionary
         """
         date, time = date_time
-        logger.info(f"Processing {date} {time}")
+
+        if self.daily_mode:
+            logger.info(f"Processing {date} (daily-averaged)")
+        else:
+            logger.info(f"Processing {date} {time}")
 
         try:
             # Create output directory for this date/time
-            output_dir = self.output_root / f"{date}_{time}"
+            if self.daily_mode:
+                output_dir = self.output_root / f"{date}_daily"
+            else:
+                output_dir = self.output_root / f"{date}_{time}"
 
             # Process the data
-            results = self.processor.process_date_time(date, time, str(output_dir))
+            if self.daily_mode:
+                results = self.processor.process_date_time(date, None, str(output_dir))
+            else:
+                results = self.processor.process_date_time(date, time, str(output_dir))
 
             if results:
                 # Calculate summary statistics
@@ -305,8 +330,10 @@ def main():
                        default='/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results',
                        help='Root directory containing GOCI band data (default: /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results)')
     parser.add_argument('--output_root',
-                       default='/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/oc3_batch_results',
-                       help='Root directory for output results (default: /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/oc3_batch_results)')
+                       default='/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/oc3_batch_results_daily',
+                       help='Root directory for output results (default: /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/oc3_batch_results_daily)')
+    parser.add_argument('--daily_mode', action='store_true', default=True,
+                       help='Process daily-averaged data instead of time-by-time data (default: True)')
     parser.add_argument('--start_date', help='Start date in YYYYMMDD format (inclusive)')
     parser.add_argument('--end_date', help='End date in YYYYMMDD format (inclusive)')
     parser.add_argument('--max_workers', type=int, help='Maximum number of parallel workers')
@@ -319,7 +346,7 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     # Initialize batch processor
-    batch_processor = BatchOC3Processor(args.data_root, args.output_root)
+    batch_processor = BatchOC3Processor(args.data_root, args.output_root, daily_mode=args.daily_mode)
 
     # Validate directories
     if not batch_processor.processor.validate_band_directories():

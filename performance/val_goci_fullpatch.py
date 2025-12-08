@@ -10,8 +10,8 @@ from matplotlib.colors import Normalize
 
 # ================== 설정 ==================
 # 기본 경로 설정
-BASE_RESULTS_DIR = '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band3/2021'
-BASE_PERFORMANCE_DIR = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band3/2021'
+BASE_RESULTS_DIR = '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band4_daily/2021'
+BASE_PERFORMANCE_DIR = '/home/juneyonglee/myhdd/GOCI_RRS/performance/band4_daily/2021'
 
 # 고정 설정
 LAND_MASK_NPY = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
@@ -601,54 +601,182 @@ def process_and_average(image_list, data_type='default'):
 
     return averaged_img
 
+def create_combined_grid_plot(gt_img, mask_img, recon_img, scatter_plot_path, output_path, time_subdir, global_vmin, global_vmax):
+    """
+    1행 4열 격자 이미지 생성: GT, Mask, Recon, Validation Scatter Plot with colorbars
+    """
+    print(f"\n[GRID] Creating 1x4 grid visualization for {time_subdir}")
+
+    land_mask = np.load(LAND_MASK_NPY)
+    land_sea_mask = np.where(land_mask == 999, 0, 1).astype(np.uint8)
+    land_bool = (land_sea_mask == 0)
+    ocean_bool = (land_sea_mask == 1)
+
+    fig, axes = plt.subplots(1, 4, figsize=(32, 8))
+
+    # 1. GT 이미지 (with colorbar)
+    if gt_img is not None:
+        gt_display = gt_img.copy()
+        gt_invalid_mask = (gt_img == -999) | (gt_img == 0) | (gt_img == 1000)
+
+        # Invalid ocean data를 0으로 설정
+        all_invalid_mask = gt_invalid_mask | land_bool
+        gt_display[all_invalid_mask] = 0
+
+        # Clip and colorize
+        clipped = np.clip(gt_display, global_vmin, global_vmax)
+        gt_colored = convert_raw_to_color(clipped, vmin=global_vmin, vmax=global_vmax, cmap_name='jet')
+
+        # 육지를 검은색으로 설정
+        gt_colored[land_bool] = [0.0, 0.0, 0.0]
+
+        # Invalid ocean data를 jet colormap의 최소값(dark blue)으로 설정
+        jet_min_color = convert_raw_to_color(np.array([[global_vmin]]), global_vmin, global_vmax, 'jet')[0, 0]
+        gt_colored[gt_invalid_mask & ~land_bool] = jet_min_color
+
+        axes[0].imshow(gt_colored, origin='upper')
+        axes[0].set_title('Input Image', fontsize=18, fontweight='bold')
+        axes[0].axis('off')
+
+        # Add colorbar (ScalarMappable 사용)
+        sm0 = cm.ScalarMappable(norm=Normalize(vmin=global_vmin, vmax=global_vmax), cmap=plt.get_cmap('jet'))
+        sm0.set_array([])
+        cbar0 = plt.colorbar(sm0, ax=axes[0], fraction=0.046, pad=0.04)
+        cbar0.set_label('RRS', fontsize=14)
+
+    # 2. Mask 이미지
+    if mask_img is not None:
+        mask_colored = np.zeros((mask_img.shape[0], mask_img.shape[1], 3), dtype=np.float32)
+        jet_blue = convert_raw_to_color(np.array([[0.0]]), 0, 1, 'jet')[0, 0]
+        mask_colored[:] = jet_blue
+
+        missing_ocean_only = (mask_img == 0.0) & ocean_bool
+        valid_ocean_pixels = ocean_bool & (mask_img == 1.0)
+
+        mask_colored[missing_ocean_only] = [1.0, 0.0, 0.0]  # Red
+        mask_colored[valid_ocean_pixels] = [1.0, 1.0, 1.0]  # White
+        mask_colored[land_bool] = [0.0, 0.0, 0.0]  # Black
+
+        axes[1].imshow(mask_colored, origin='upper')
+        axes[1].set_title('Mask', fontsize=18, fontweight='bold')
+        axes[1].axis('off')
+
+    # 3. Recon 이미지 (with colorbar)
+    if recon_img is not None:
+        recon_display = recon_img.copy()
+        recon_invalid_mask = (recon_img == -999) | (recon_img == 0)
+
+        # Invalid ocean data를 0으로 설정
+        all_invalid_mask = recon_invalid_mask | land_bool
+        recon_display[all_invalid_mask] = 0
+
+        # Clip and colorize
+        clipped = np.clip(recon_display, global_vmin, global_vmax)
+        recon_colored = convert_raw_to_color(clipped, vmin=global_vmin, vmax=global_vmax, cmap_name='jet')
+
+        # 육지를 검은색으로 설정
+        recon_colored[land_bool] = [0.0, 0.0, 0.0]
+
+        # Invalid ocean data를 jet colormap의 최소값(dark blue)으로 설정
+        jet_min_color = convert_raw_to_color(np.array([[global_vmin]]), global_vmin, global_vmax, 'jet')[0, 0]
+        recon_colored[recon_invalid_mask & ~land_bool] = jet_min_color
+
+        axes[2].imshow(recon_colored, origin='upper')
+        axes[2].set_title('Reconstruction', fontsize=18, fontweight='bold')
+        axes[2].axis('off')
+
+        # Add colorbar (ScalarMappable 사용)
+        sm2 = cm.ScalarMappable(norm=Normalize(vmin=global_vmin, vmax=global_vmax), cmap=plt.get_cmap('jet'))
+        sm2.set_array([])
+        cbar2 = plt.colorbar(sm2, ax=axes[2], fraction=0.046, pad=0.04)
+        cbar2.set_label('RRS', fontsize=14)
+
+    # 4. Validation Scatter Plot
+    if os.path.exists(scatter_plot_path):
+        scatter_img = plt.imread(scatter_plot_path)
+        axes[3].imshow(scatter_img)
+        axes[3].set_title('Validation', fontsize=18, fontweight='bold')
+        axes[3].axis('off')
+    else:
+        axes[3].text(0.5, 0.5, 'Scatter Plot\nNot Available',
+                    ha='center', va='center', fontsize=16, color='gray')
+        axes[3].axis('off')
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f"[GRID] Saved combined grid: {output_path}")
+
 def process_date(base_date_path, out_root_dir):
-    """Main processing logic for a single date."""
+    """
+    Main processing logic for a single date - for daily-averaged data.
+    This version processes already pixel-averaged daily data directly.
+    Returns: 데이터 딕셔너리 {'daily': {'gt': img, 'mask': img, 'recon': img, 'out_dir': path, 'vmin': val, 'vmax': val}}
+    """
     if not os.path.isdir(base_date_path):
         print(f"\n[ERROR] Base date path not found: {base_date_path}. Skipping.")
-        return
+        return {}
 
-    time_subdirs = [d for d in os.listdir(base_date_path) if os.path.isdir(os.path.join(base_date_path, d))]
+    # For daily-averaged data, we expect a 'degree' subdirectory directly
+    degree_path = os.path.join(base_date_path, 'degree')
 
-    # Process each time subdirectory individually instead of averaging
-    for time_idx, time_subdir in enumerate(sorted(time_subdirs)):
-        degree_path = os.path.join(base_date_path, time_subdir, 'degree')
-        print(f"\n[Main] Processing time subdir: {time_subdir}")
+    if not os.path.isdir(degree_path):
+        print(f"\n[ERROR] 'degree' directory not found in: {base_date_path}")
+        print(f"Expected path: {degree_path}")
+        return {}
 
-        # Create output directory for this specific time
-        time_out_dir = os.path.join(out_root_dir, f"time_{time_idx:02d}_{time_subdir}")
+    print(f"\n[Main] Processing daily-averaged data from: {base_date_path}")
 
-        # Load all images first
-        gt_img = None
-        recon_img = None
-        mask_img = None
+    # Create output directory
+    daily_out_dir = out_root_dir
 
-        for data_type in ['gt', 'recon', 'mask']:
-            patch_dir = os.path.join(degree_path, data_type)
-            if os.path.isdir(patch_dir):
-                print(f"  - Loading {data_type} data from: {patch_dir}")
-                full_img = load_full_image_from_patches(patch_dir)
-                if full_img is not None:
-                    if data_type == 'gt':
-                        gt_img = full_img
-                    elif data_type == 'recon':
-                        recon_img = full_img
-                    elif data_type == 'mask':
-                        mask_img = full_img
-            else:
-                print(f"  - '{data_type}' directory not found in {degree_path}. Skipping.")
+    # Load all images
+    gt_img = None
+    recon_img = None
+    mask_img = None
 
-        # Calculate global colorbar range for GT and recon
-        global_vmin, global_vmax = calculate_global_range(gt_img, recon_img)
+    for data_type in ['gt', 'recon', 'mask']:
+        patch_dir = os.path.join(degree_path, data_type)
+        if os.path.isdir(patch_dir):
+            print(f"  - Loading {data_type} data from: {patch_dir}")
+            full_img = load_full_image_from_patches(patch_dir)
+            if full_img is not None:
+                if data_type == 'gt':
+                    gt_img = full_img
+                elif data_type == 'recon':
+                    recon_img = full_img
+                elif data_type == 'mask':
+                    mask_img = full_img
+        else:
+            print(f"  - '{data_type}' directory not found in {degree_path}. Skipping.")
 
-        # Save images with common colorbar range
-        if gt_img is not None:
-            save_image_with_details(gt_img, time_out_dir, f'gt_{time_subdir}', 'GT Chlorophyll-a (mg/m³)',
-                                   global_vmin=global_vmin, global_vmax=global_vmax)
-        if recon_img is not None:
-            save_image_with_details(recon_img, time_out_dir, f'recon_{time_subdir}', 'Recon Chlorophyll-a (mg/m³)',
-                                   global_vmin=global_vmin, global_vmax=global_vmax)
-        if mask_img is not None:
-            save_image_with_details(mask_img, time_out_dir, f'mask_{time_subdir}', 'Mask', cmap_name='RdYlBu_r')
+    # Calculate global colorbar range for GT and recon
+    global_vmin, global_vmax = calculate_global_range(gt_img, recon_img)
+
+    # Save images with common colorbar range
+    if gt_img is not None:
+        save_image_with_details(gt_img, daily_out_dir, 'gt_daily', 'Daily Averaged GT RRS',
+                               global_vmin=global_vmin, global_vmax=global_vmax)
+    if recon_img is not None:
+        save_image_with_details(recon_img, daily_out_dir, 'recon_daily', 'Daily Averaged Recon RRS',
+                               global_vmin=global_vmin, global_vmax=global_vmax)
+    if mask_img is not None:
+        save_image_with_details(mask_img, daily_out_dir, 'mask_daily', 'Daily Averaged Mask', cmap_name='RdYlBu_r')
+
+    # 데이터 반환
+    images_data = {
+        'daily': {
+            'gt': gt_img,
+            'mask': mask_img,
+            'recon': recon_img,
+            'out_dir': daily_out_dir,
+            'vmin': global_vmin,
+            'vmax': global_vmax
+        }
+    }
+
+    return images_data
 
 def filter_top_percent_data(gt_data, recon_data, top_percent=0.95):
     """
@@ -686,7 +814,10 @@ def filter_top_99_percent_data(gt_data, recon_data):
 
 def validate_with_scatter_plots(base_date_path, out_root_dir, land_sea_mask_path, sample_ratio=0.1):
     """
-    GT와 Recon 데이터를 비교하여 scatter plot을 생성하는 검증 함수 (전체 + 시간대별)
+    GT와 Recon 데이터를 비교하여 scatter plot을 생성하는 검증 함수 (daily-averaged data용)
+    Returns: (metrics_dict, scatter_plot_paths_dict)
+        - metrics_dict: 메트릭 딕셔너리
+        - scatter_plot_paths_dict: {'daily': scatter_plot_path}
     """
     print(f"\n=== Creating Scatter Plot Validation ===")
     print(f"Input path: {base_date_path}")
@@ -694,120 +825,102 @@ def validate_with_scatter_plots(base_date_path, out_root_dir, land_sea_mask_path
 
     if not os.path.isdir(base_date_path):
         print(f"❌ Base date path not found: {base_date_path}")
-        return
+        return None, {}
 
-    time_subdirs = [d for d in os.listdir(base_date_path) if os.path.isdir(os.path.join(base_date_path, d))]
+    # For daily-averaged data, we expect a 'degree' subdirectory directly
+    degree_path = os.path.join(base_date_path, 'degree')
+
+    if not os.path.isdir(degree_path):
+        print(f"❌ 'degree' directory not found in: {base_date_path}")
+        return None, {}
 
     all_gt_data = []
     all_recon_data = []
-    time_data = {}  # 시간대별 데이터 저장
+    scatter_plot_paths = {}
     land_mask = np.load(land_sea_mask_path)
     land_sea_mask = np.where(land_mask == 999, 0, 1).astype(np.uint8)  # 0=육지, 1=바다
 
-    # 각 시간대별 데이터 수집
-    for time_subdir in time_subdirs:
-        degree_path = os.path.join(base_date_path, time_subdir, 'degree')
+    # 데이터 수집 (daily-averaged data)
+    print(f"Processing daily-averaged data from: {degree_path}")
 
-        gt_dir = os.path.join(degree_path, 'gt')
-        recon_dir = os.path.join(degree_path, 'recon')
+    gt_dir = os.path.join(degree_path, 'gt')
+    recon_dir = os.path.join(degree_path, 'recon')
 
-        if not (os.path.exists(gt_dir) and os.path.exists(recon_dir)):
-            print(f"⚠️ Skipping {time_subdir}: Missing gt or recon directory")
-            continue
+    if not (os.path.exists(gt_dir) and os.path.exists(recon_dir)):
+        print(f"⚠️ Missing gt or recon directory in {degree_path}")
+        return None, {}
 
-        print(f"Processing time subdir: {time_subdir}")
+    # CSV 파일 리스트 가져오기
+    gt_files = sorted(glob.glob(os.path.join(gt_dir, '*.csv')), key=natural_sort_key)
+    recon_files = sorted(glob.glob(os.path.join(recon_dir, '*.csv')), key=natural_sort_key)
 
-        # 시간대별 데이터 초기화
-        time_gt_data = []
-        time_recon_data = []
+    if len(gt_files) != len(recon_files):
+        print(f"⚠️ File count mismatch: GT={len(gt_files)}, Recon={len(recon_files)}")
+        return None, {}
 
-        # CSV 파일 리스트 가져오기
-        gt_files = sorted(glob.glob(os.path.join(gt_dir, '*.csv')), key=natural_sort_key)
-        recon_files = sorted(glob.glob(os.path.join(recon_dir, '*.csv')), key=natural_sort_key)
+    # 샘플링
+    sample_size = max(1, int(len(gt_files) * sample_ratio))
+    sample_indices = np.random.choice(len(gt_files), size=sample_size, replace=False)
 
-        if len(gt_files) != len(recon_files):
-            print(f"⚠️ File count mismatch in {time_subdir}: GT={len(gt_files)}, Recon={len(recon_files)}")
-            continue
+    print(f"  Sampling {sample_size}/{len(gt_files)} files")
 
-        # 샘플링
-        sample_size = max(1, int(len(gt_files) * sample_ratio))
-        sample_indices = np.random.choice(len(gt_files), size=sample_size, replace=False)
+    for idx in sample_indices:
+        gt_file = gt_files[idx]
+        recon_file = recon_files[idx]
 
-        print(f"  Sampling {sample_size}/{len(gt_files)} files")
+        try:
+            # 파일에서 좌표 추출
+            filename = os.path.basename(gt_file)
+            match = re.search(r'y(\d+)_x(\d+)', filename)
+            if not match:
+                continue
+            row, col = int(match.group(1)), int(match.group(2))
 
-        for idx in sample_indices:
-            gt_file = gt_files[idx]
-            recon_file = recon_files[idx]
+            # 데이터 로드
+            gt_data = np.loadtxt(gt_file, delimiter=',', dtype=np.float32)
+            recon_data = np.loadtxt(recon_file, delimiter=',', dtype=np.float32)
 
-            try:
-                # 파일에서 좌표 추출
-                filename = os.path.basename(gt_file)
-                match = re.search(r'y(\d+)_x(\d+)', filename)
-                if not match:
-                    continue
-                row, col = int(match.group(1)), int(match.group(2))
-
-                # 데이터 로드
-                gt_data = np.loadtxt(gt_file, delimiter=',', dtype=np.float32)
-                recon_data = np.loadtxt(recon_file, delimiter=',', dtype=np.float32)
-
-                if gt_data.shape != recon_data.shape or gt_data.shape != (256, 256):
-                    continue
-
-                # 육지-해양 마스크 적용
-                try:
-                    patch_land_sea_mask = land_sea_mask[row:row+256, col:col+256]
-                    ocean_mask = (patch_land_sea_mask == 1)  # 바다 영역
-
-                    # 해양 영역의 비율 확인
-                    ocean_ratio = np.sum(ocean_mask) / (256 * 256)
-                    if ocean_ratio < 0.3:  # 해양 영역이 30% 미만이면 건너뛰기
-                        continue
-
-                except IndexError:
-                    continue
-
-                # 유효한 해양 데이터만 추출
-                gt_ocean = gt_data[ocean_mask]
-                recon_ocean = recon_data[ocean_mask]
-
-                # 특수값 제거
-                valid_mask = (gt_ocean != -999) & (recon_ocean != -999) & \
-                           (gt_ocean != 255) & (recon_ocean != 255) & \
-                           (~np.isnan(gt_ocean)) & (~np.isnan(recon_ocean)) & \
-                           (~np.isinf(gt_ocean)) & (~np.isinf(recon_ocean))
-
-                if np.sum(valid_mask) > 10:  # 최소 10개 이상의 유효한 픽셀
-                    valid_gt = gt_ocean[valid_mask].tolist()
-                    valid_recon = recon_ocean[valid_mask].tolist()
-
-                    # 전체 데이터에 추가
-                    all_gt_data.extend(valid_gt)
-                    all_recon_data.extend(valid_recon)
-
-                    # 시간대별 데이터에 추가
-                    time_gt_data.extend(valid_gt)
-                    time_recon_data.extend(valid_recon)
-
-            except Exception as e:
-                print(f"⚠️ Error processing {filename}: {e}")
+            if gt_data.shape != recon_data.shape or gt_data.shape != (256, 256):
                 continue
 
-        # 시간대별 데이터 저장 (95%와 99% 필터링 모두 적용)
-        if len(time_gt_data) > 0:
-            filtered_time_gt_95, filtered_time_recon_95 = filter_top_95_percent_data(time_gt_data, time_recon_data)
-            filtered_time_gt_99, filtered_time_recon_99 = filter_top_99_percent_data(time_gt_data, time_recon_data)
-            time_data[time_subdir] = {
-                'gt_95': filtered_time_gt_95,
-                'recon_95': filtered_time_recon_95,
-                'gt_99': filtered_time_gt_99,
-                'recon_99': filtered_time_recon_99
-            }
-            print(f"  ✅ Time {time_subdir}: 95%={len(filtered_time_gt_95):,}, 99%={len(filtered_time_gt_99):,} / {len(time_gt_data):,} total points")
+            # 육지-해양 마스크 적용
+            try:
+                patch_land_sea_mask = land_sea_mask[row:row+256, col:col+256]
+                ocean_mask = (patch_land_sea_mask == 1)  # 바다 영역
+
+                # 해양 영역의 비율 확인
+                ocean_ratio = np.sum(ocean_mask) / (256 * 256)
+                if ocean_ratio < 0.3:  # 해양 영역이 30% 미만이면 건너뛰기
+                    continue
+
+            except IndexError:
+                continue
+
+            # 유효한 해양 데이터만 추출
+            gt_ocean = gt_data[ocean_mask]
+            recon_ocean = recon_data[ocean_mask]
+
+            # 특수값 제거
+            valid_mask = (gt_ocean != -999) & (recon_ocean != -999) & \
+                       (gt_ocean != 255) & (recon_ocean != 255) & \
+                       (~np.isnan(gt_ocean)) & (~np.isnan(recon_ocean)) & \
+                       (~np.isinf(gt_ocean)) & (~np.isinf(recon_ocean))
+
+            if np.sum(valid_mask) > 10:  # 최소 10개 이상의 유효한 픽셀
+                valid_gt = gt_ocean[valid_mask].tolist()
+                valid_recon = recon_ocean[valid_mask].tolist()
+
+                # 전체 데이터에 추가
+                all_gt_data.extend(valid_gt)
+                all_recon_data.extend(valid_recon)
+
+        except Exception as e:
+            print(f"⚠️ Error processing {filename}: {e}")
+            continue
 
     if len(all_gt_data) == 0:
         print("❌ No valid data collected for scatter plot")
-        return
+        return None, {}
 
     print(f"✅ Collected {len(all_gt_data):,} valid data points from ocean areas")
 
@@ -838,18 +951,20 @@ def validate_with_scatter_plots(base_date_path, out_root_dir, land_sea_mask_path
         'r2': r2_95  # Actual R² from top 95% data
     }
 
-    print(f"Overall data range: [{vmin:.6f}, {vmax:.6f}]")
-    print(f"Overall RMSE: {rmse:.6f}")
-    print(f"Overall MAE: {mae:.6f}")
+    print(f"Data range: [{vmin:.6f}, {vmax:.6f}]")
+    print(f"RMSE: {rmse:.6f}")
+    print(f"MAE: {mae:.6f}")
+    print(f"R²: {r2_95:.6f}")
 
     # 출력 디렉토리 생성
     os.makedirs(out_root_dir, exist_ok=True)
 
-    # 1. 전체 데이터 scatter plot 생성 (99% 데이터로 표시, 95% 성능지표 표시)
+    # Daily scatter plot 생성 (99% 데이터로 표시, 95% 성능지표 표시)
     try:
+        scatter_filename = "ocean_validation_daily_top99_metrics95"
         plot_parity_improved(
             filename=out_root_dir,
-            loss_rate="ocean_validation_overall_top99_metrics95",
+            loss_rate=scatter_filename,
             true=gt_array_99,  # 99% 데이터로 scatter plot
             pred=recon_array_99,  # 99% 데이터로 scatter plot
             metrics_dict=metrics_dict,  # 95% 데이터의 실제 성능지표
@@ -857,76 +972,41 @@ def validate_with_scatter_plots(base_date_path, out_root_dir, land_sea_mask_path
             vmax=vmax,
             xlabel="Ground Truth RRS",
             ylabel="Reconstructed RRS",
-            title="GOCI Ocean RRS Validation",
+            title="GOCI Daily Averaged RRS Validation",
             plot_style="scatter"
         )
-        print(f"✅ Overall scatter plot saved to: {out_root_dir}")
+
+        # Scatter plot 경로 저장
+        scatter_plot_path = os.path.join(out_root_dir, f'{scatter_filename}_rrs_parity_plot.png')
+        scatter_plot_paths['daily'] = scatter_plot_path
+
+        print(f"✅ Daily scatter plot saved (Display: {len(gt_array_99):,} points, Metrics from: {len(gt_array_95):,} points)")
+        print(f"   Path: {scatter_plot_path}")
 
     except Exception as e:
-        print(f"❌ Error creating overall scatter plot: {e}")
+        print(f"❌ Error creating scatter plot: {e}")
 
-    # 2. 시간대별 scatter plot 생성
-    print(f"\n=== Creating Time-based Scatter Plots ===")
-    for time_subdir, data in time_data.items():
-        try:
-            time_gt_95 = data['gt_95']
-            time_recon_95 = data['recon_95']
-            time_gt_99 = data['gt_99']
-            time_recon_99 = data['recon_99']
-
-            if len(time_gt_99) < 100:  # 최소 100개 이상의 데이터 포인트 필요
-                print(f"⚠️ Skipping {time_subdir}: insufficient data ({len(time_gt_99)} points)")
-                continue
-
-            # 시간대별 지표 계산 (상위 95% 성능 상태에서 실제 계산)
-            time_diff_95 = time_recon_95 - time_gt_95
-            time_rmse = np.sqrt(np.mean(time_diff_95 ** 2))  # Actual RMSE from top 95%
-            time_mae = np.mean(np.abs(time_diff_95))         # Actual MAE from top 95%
-            time_r2 = r2_score(time_gt_95, time_recon_95)    # Actual R² from top 95%
-
-            time_metrics_dict = {
-                'rmse': time_rmse,
-                'mae': time_mae,
-                'r2': time_r2
-            }
-
-            plot_parity_improved(
-                filename=out_root_dir,
-                loss_rate=f"ocean_validation_time_{time_subdir}_top99_metrics95",
-                true=time_gt_99,     # 99% 데이터로 scatter plot
-                pred=time_recon_99,  # 99% 데이터로 scatter plot
-                metrics_dict=time_metrics_dict,  # 95% 데이터의 실제 성능지표
-                vmin=vmin,  # 전체 데이터 범위 사용 (일관성을 위해)
-                vmax=vmax,
-                xlabel="Ground Truth RRS",
-                ylabel="Reconstructed RRS",
-                title=f"GOCI Ocean RRS Validation (Time: {time_subdir})",
-                plot_style="scatter"
-            )
-            print(f"✅ Time {time_subdir} scatter plot saved (Display: {len(time_gt_99):,} points, Metrics from: {len(time_gt_95):,} points)")
-
-        except Exception as e:
-            print(f"❌ Error creating scatter plot for time {time_subdir}: {e}")
-
-    print(f"✅ Scatter plot validation completed for {len(time_data)} time periods")
+    # 메트릭과 scatter plot 경로 반환
+    return metrics_dict, scatter_plot_paths
 
 def process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask_path, target_dates):
     """
-    여러 날짜를 일괄 처리하는 함수 (GOCI용)
+    여러 날짜를 일괄 처리하는 함수 (GOCI daily-averaged data용)
 
     Args:
-        base_results_dir: 결과 기본 경로 (예: '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band2/2021')
-        base_performance_dir: 성능 저장 기본 경로 (예: '/home/juneyonglee/myhdd/GOCI_RRS/performance/band2/2021')
+        base_results_dir: 결과 기본 경로 (예: '/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/band4_daily/2021')
+        base_performance_dir: 성능 저장 기본 경로 (예: '/home/juneyonglee/myhdd/GOCI_RRS/performance/band4_daily/2021')
         land_sea_mask_path: GOCI 육지-해양 마스크 파일 경로
         target_dates: 처리할 날짜 리스트 (예: ['20210101', '20210102'])
     """
-    print(f"=== Processing Multiple GOCI Dates ===")
+    print(f"=== Processing Multiple GOCI Daily-Averaged Dates ===")
     print(f"Base results dir: {base_results_dir}")
     print(f"Base performance dir: {base_performance_dir}")
     print(f"Target dates: {target_dates}")
 
     success_count = 0
     failed_dates = []
+    all_metrics = []  # 모든 날짜의 메트릭 저장
 
     for date_str in target_dates:
         if not date_str.strip():  # 빈 문자열 건너뛰기
@@ -950,41 +1030,71 @@ def process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask
                 failed_dates.append((date_str, "Input path not found"))
                 continue
 
-            # 시간대별 하위 디렉토리 확인
-            time_subdirs = [d for d in os.listdir(date_result_path)
-                           if os.path.isdir(os.path.join(date_result_path, d))]
-
-            if not time_subdirs:
-                print(f"⚠️  No time subdirectories found in: {date_result_path}")
-                print(f"Available items: {os.listdir(date_result_path) if os.path.exists(date_result_path) else 'None'}")
-                failed_dates.append((date_str, "No time subdirectories found"))
+            # degree 디렉토리 확인
+            degree_path = os.path.join(date_result_path, 'degree')
+            if not os.path.exists(degree_path):
+                print(f"❌ 'degree' directory not found in: {date_result_path}")
+                failed_dates.append((date_str, "'degree' directory not found"))
                 continue
 
-            print(f"Found {len(time_subdirs)} time subdirectories: {time_subdirs}")
-
-            # 해양 마스크 존재 확인 (간단한 버전)
-            has_ocean_data = False
-            for time_subdir in time_subdirs[:3]:  # 처음 몇 개만 확인
-                degree_path = os.path.join(date_result_path, time_subdir, 'degree')
-                if os.path.exists(degree_path):
-                    mask_dir = os.path.join(degree_path, 'mask')
-                    if os.path.exists(mask_dir):
-                        mask_files = [f for f in os.listdir(mask_dir) if f.endswith('.csv')]
-                        if mask_files:
-                            has_ocean_data = True
-                            break
-
-            if not has_ocean_data:
-                print(f"⚠️  No ocean mask data found for {date_str}")
-                failed_dates.append((date_str, "No ocean mask data found"))
+            # 해양 마스크 존재 확인
+            mask_dir = os.path.join(degree_path, 'mask')
+            if not os.path.exists(mask_dir):
+                print(f"⚠️  No mask directory found for {date_str}")
+                failed_dates.append((date_str, "No mask directory found"))
                 continue
+
+            mask_files = [f for f in os.listdir(mask_dir) if f.endswith('.csv')]
+            if not mask_files:
+                print(f"⚠️  No mask files found for {date_str}")
+                failed_dates.append((date_str, "No mask files found"))
+                continue
+
+            print(f"Found {len(mask_files)} mask files")
 
             # 처리 실행
-            process_date(date_result_path, date_output_path)
+            images_data = process_date(date_result_path, date_output_path)
 
             # Scatter plot 검증 추가
             scatter_output_path = os.path.join(date_output_path, 'scatter_plots')
-            validate_with_scatter_plots(date_result_path, scatter_output_path, land_sea_mask_path, sample_ratio=0.1)
+            date_metrics, scatter_plot_paths = validate_with_scatter_plots(date_result_path, scatter_output_path, land_sea_mask_path, sample_ratio=0.1)
+
+            # 메트릭 저장
+            if date_metrics is not None:
+                all_metrics.append({
+                    'date': date_str,
+                    'rmse': date_metrics['rmse'],
+                    'mae': date_metrics['mae'],
+                    'r2': date_metrics['r2']
+                })
+
+            # 격자 이미지 생성
+            if 'daily' in images_data and images_data['daily']['gt'] is not None:
+                print(f"\n=== Creating Combined Grid Image for {date_str} ===")
+                grid_output_dir = os.path.join(date_output_path, 'combined_grids')
+                os.makedirs(grid_output_dir, exist_ok=True)
+
+                # Scatter plot 경로 가져오기
+                scatter_plot_path = scatter_plot_paths.get('daily', '')
+
+                # 격자 이미지 출력 경로
+                grid_output_path = os.path.join(grid_output_dir, f'combined_grid_daily.png')
+
+                try:
+                    # 격자 이미지 생성
+                    img_data = images_data['daily']
+                    create_combined_grid_plot(
+                        gt_img=img_data['gt'],
+                        mask_img=img_data['mask'],
+                        recon_img=img_data['recon'],
+                        scatter_plot_path=scatter_plot_path,
+                        output_path=grid_output_path,
+                        time_subdir='daily',
+                        global_vmin=img_data['vmin'],
+                        global_vmax=img_data['vmax']
+                    )
+                except Exception as e:
+                    print(f"❌ Error creating grid image: {e}")
 
             success_count += 1
             print(f"✅ Successfully processed {date_str}")
@@ -1010,16 +1120,43 @@ def process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask
     if success_count > 0:
         print(f"\nResults saved to: {base_performance_dir}")
 
+    # 전체 평균 메트릭 계산 및 저장
+    if len(all_metrics) > 0:
+        print(f"\n{'='*60}")
+        print(f"OVERALL AVERAGE METRICS ACROSS ALL DATES")
+        print(f"{'='*60}")
+
+        avg_rmse = np.mean([m['rmse'] for m in all_metrics])
+        avg_mae = np.mean([m['mae'] for m in all_metrics])
+        avg_r2 = np.mean([m['r2'] for m in all_metrics])
+
+        print(f"Average RMSE: {avg_rmse:.8f}")
+        print(f"Average MAE: {avg_mae:.8f}")
+        print(f"Average R²: {avg_r2:.6f}")
+
+        # 메트릭을 CSV 파일로 저장
+        metrics_file = os.path.join(base_performance_dir, 'overall_metrics_summary.csv')
+        os.makedirs(base_performance_dir, exist_ok=True)
+
+        with open(metrics_file, 'w') as f:
+            f.write("Date,RMSE,MAE,R2\n")
+            for m in all_metrics:
+                f.write(f"{m['date']},{m['rmse']:.8f},{m['mae']:.8f},{m['r2']:.6f}\n")
+            f.write(f"\nAverage,{avg_rmse:.8f},{avg_mae:.8f},{avg_r2:.6f}\n")
+
+        print(f"✅ Overall metrics saved to: {metrics_file}")
+
 # 메인 루프
 if __name__ == '__main__':
-    # 처리할 밴드 리스트 (band2, band3, band4)
-    bands = ['band2', 'band3', 'band4']
+    # 처리할 밴드 리스트 - 일일 평균 데이터용
+    bands = ['band2_daily', 'band3_daily', 'band4_daily']
 
     # 공통 설정
     land_sea_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
 
     # 처리할 날짜 리스트 (원하는 날짜들을 여기에 추가)
-    target_dates = ['20210101', '20210108','20210115','20210122','20210129']
+    # 2021년 1월 전체 (1일 ~ 31일)
+    target_dates = [f'202101{day:02d}' for day in range(1, 32)]
 
     # 각 밴드별로 처리
     for band in bands:
@@ -1028,7 +1165,7 @@ if __name__ == '__main__':
         print(f"{'='*80}\n")
 
         base_results_dir = f'/home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_results/{band}/2021'
-        base_performance_dir = f'/home/juneyonglee/myhdd/GOCI_RRS/performance/{band}/2021'
+        base_performance_dir = f'/home/juneyonglee/myhdd/GOCI_RRS/performance/{band}/2021_daily'
 
         # 선택한 날짜들만 처리
         process_multiple_dates(base_results_dir, base_performance_dir, land_sea_mask_path, target_dates)

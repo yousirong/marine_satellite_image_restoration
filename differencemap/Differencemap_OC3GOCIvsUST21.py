@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
-Daily averaging of OC3 chlorophyll data and difference map calculation.
-This script:
-1. Averages 8 hourly OC3 results into daily chlorophyll
+Daily OC3 chlorophyll data processing and difference map calculation.
+This script supports two modes:
+- Hourly mode: Averages multiple hourly OC3 results into daily chlorophyll
+- Daily mode (default): Uses OC3 results from daily-averaged RRS data (no averaging needed)
+
+For both modes:
+1. Loads OC3 chlorophyll data (either averaging hourly or loading daily directly)
 2. Calculates difference map between OC3 daily and existing KHOA daily chlorophyll
 3. Saves results as PNG visualization files
 """
@@ -29,7 +33,8 @@ logger = logging.getLogger(__name__)
 
 class DailyAveraging:
     """
-    Process hourly OC3 chlorophyll data to daily averages and calculate difference maps
+    Process daily-averaged OC3 chlorophyll data and calculate difference maps
+    Supports both hourly-averaged and direct daily OC3 results
     """
 
     def __init__(self,
@@ -37,21 +42,26 @@ class DailyAveraging:
                  khoa_daily_dir: str,
                  output_dir: str,
                  goci_land_mask_path: str = None,
-                 ust_land_mask_path: str = None):
+                 ust_land_mask_path: str = None,
+                 daily_mode: bool = False):
         """
         Initialize DailyAveraging processor
 
         Args:
-            oc3_results_dir: Directory containing hourly OC3 results
+            oc3_results_dir: Directory containing OC3 results
+                             - hourly mode: YYYYMMDD_HHMMSS subdirectories
+                             - daily mode: YYYYMMDD_daily subdirectories
             khoa_daily_dir: Directory containing KHOA daily chlorophyll files
             output_dir: Output directory for daily averages and difference maps
             goci_land_mask_path: Path to GOCI land mask file
             ust_land_mask_path: Path to UST21 land mask file
+            daily_mode: If True, expects daily-averaged OC3 results (no hourly averaging needed)
         """
         self.oc3_results_dir = Path(oc3_results_dir)
         self.khoa_daily_dir = Path(khoa_daily_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.daily_mode = daily_mode
 
         # Load land masks
         self.goci_land_mask = None
@@ -67,27 +77,61 @@ class DailyAveraging:
 
     def get_daily_timestamps(self, date_str: str) -> List[str]:
         """
-        Get all hourly timestamps for a given date
+        Get all hourly timestamps for a given date (hourly mode) or daily timestamp (daily mode)
 
         Args:
             date_str: Date in YYYYMMDD format
 
         Returns:
-            List of timestamp directories in YYYYMMDD_HHMMSS format
+            List of timestamp directories
+            - hourly mode: YYYYMMDD_HHMMSS format
+            - daily mode: [YYYYMMDD_daily]
         """
         # date_str이 완전한 형식(YYYYMMDD)인지 확인
         if len(date_str) != 8:
             # logger.warning(f"Invalid date format: {date_str}. Expected YYYYMMDD format.")
             return []
 
-        # List all directories matching the date pattern (YYYYMMDD_*)
-        date_pattern = f"{date_str}_*"
-        timestamp_dirs = sorted(self.oc3_results_dir.glob(date_pattern))
+        if self.daily_mode:
+            # For daily-averaged data: look for YYYYMMDD_daily directory
+            daily_timestamp = f"{date_str}_daily"
+            daily_dir = self.oc3_results_dir / daily_timestamp
+            if daily_dir.exists() and daily_dir.is_dir():
+                # logger.info(f"Found daily result for {date_str}: {daily_timestamp}")
+                return [daily_timestamp]
+            else:
+                # logger.warning(f"Daily directory not found: {daily_dir}")
+                return []
+        else:
+            # List all directories matching the date pattern (YYYYMMDD_*)
+            date_pattern = f"{date_str}_*"
+            timestamp_dirs = sorted(self.oc3_results_dir.glob(date_pattern))
 
-        timestamps = [d.name for d in timestamp_dirs if d.is_dir()]
-        # logger.info(f"Found {len(timestamps)} hourly results for {date_str}: {timestamps}")
+            timestamps = [d.name for d in timestamp_dirs if d.is_dir()]
+            # logger.info(f"Found {len(timestamps)} hourly results for {date_str}: {timestamps}")
 
-        return timestamps
+            return timestamps
+
+    def clip_chlorophyll_range(self, data: np.ndarray, min_val: float = 0.01, max_val: float = 10.0) -> np.ndarray:
+        """
+        Filter chlorophyll values to scientifically valid range
+        Values outside the range are set to NaN (excluded from analysis)
+
+        Args:
+            data: Chlorophyll data array
+            min_val: Minimum valid value (default: 0.01 mg/m³)
+            max_val: Maximum valid value (default: 10.0 mg/m³)
+
+        Returns:
+            Filtered data with out-of-range values set to NaN
+        """
+        filtered = data.copy()
+
+        # Set values outside the valid range to NaN
+        invalid_mask = (filtered < min_val) | (filtered > max_val)
+        filtered[invalid_mask] = np.nan
+
+        return filtered.astype(np.float32)
 
     def load_tile_data(self,
                        timestamp: str,
@@ -96,8 +140,8 @@ class DailyAveraging:
         Load chlorophyll data for a specific tile and timestamp
 
         Args:
-            timestamp: Timestamp in YYYYMMDD_HHMMSS format
-            tile_id: Tile identifier (e.g., mask_10_y0000_x2304)
+            timestamp: Timestamp in YYYYMMDD_HHMMSS format (hourly mode) or YYYYMMDD_daily (daily mode)
+            tile_id: Tile identifier (e.g., mask_10_y0000_x2304 or img_504_y5429_x4864)
 
         Returns:
             Numpy array of chlorophyll data or None if file not found
@@ -115,7 +159,9 @@ class DailyAveraging:
             # Remove extreme outliers and invalid values
             # Set values outside valid range to 0
             data[data < 0] = 0.0          # Negative values → 0
-            data[data > 100] = 0.0        # Extreme outliers (>100) → 0
+
+            # Clip to valid chlorophyll range (0.01 ~ 10.0 mg/m³)
+            data = self.clip_chlorophyll_range(data, min_val=0.01, max_val=10.0)
 
             return data
         except Exception as e:
@@ -127,7 +173,7 @@ class DailyAveraging:
         Get list of available tiles for a given timestamp
 
         Args:
-            timestamp: Timestamp in YYYYMMDD_HHMMSS format
+            timestamp: Timestamp in YYYYMMDD_HHMMSS format (hourly mode) or YYYYMMDD_daily (daily mode)
 
         Returns:
             List of tile IDs
@@ -220,6 +266,9 @@ class DailyAveraging:
             # Extract chlorophyll data
             if 'merged_daily_Chl' in ds.variables:
                 chl_data = ds.variables['merged_daily_Chl'][:].astype(np.float32)
+
+                # Clip to valid chlorophyll range (0.01 ~ 10.0 mg/m³)
+                chl_data = self.clip_chlorophyll_range(chl_data, min_val=0.01, max_val=10.0)
             else:
                 logger.error(f"Variable 'merged_daily_Chl' not found in {nc_path}")
                 ds.close()
@@ -258,6 +307,8 @@ class DailyAveraging:
                                      date_str: str) -> Optional[np.ndarray]:
         """
         Reconstruct daily chlorophyll data from all tiles
+        - In hourly mode: averages hourly tiles into daily
+        - In daily mode: directly loads daily tiles (no averaging needed)
 
         Args:
             date_str: Date in YYYYMMDD format
@@ -278,20 +329,28 @@ class DailyAveraging:
 
         # logger.info(f"Processing {len(tiles)} tiles for {date_str}")
 
-        # Dictionary to store averaged data for each tile
+        # Dictionary to store data for each tile
         tile_data = {}
 
-        for tile_id in tiles:
-            daily_tile = self.average_hourly_to_daily(date_str, tile_id)
-            if daily_tile is not None:
-                tile_data[tile_id] = daily_tile
+        if self.daily_mode:
+            # For daily mode: directly load tiles (no averaging needed)
+            for tile_id in tiles:
+                tile_array = self.load_tile_data(timestamps[0], tile_id)
+                if tile_array is not None:
+                    tile_data[tile_id] = tile_array
+        else:
+            # For hourly mode: average hourly tiles into daily
+            for tile_id in tiles:
+                daily_tile = self.average_hourly_to_daily(date_str, tile_id)
+                if daily_tile is not None:
+                    tile_data[tile_id] = daily_tile
 
         if not tile_data:
             logger.error(f"No valid tile data found for {date_str}")
             return None
 
         # Parse tile coordinates to reconstruct the full grid
-        # Tile format: mask_<idx>_y<y_start>_x<x_start>
+        # Tile format: mask_<idx>_y<y_start>_x<x_start> or img_<idx>_y<y_start>_x<x_start>
         # Each tile is typically 256x256 pixels
         full_data = self.reconstruct_grid_from_tiles(tile_data)
 
@@ -315,7 +374,7 @@ class DailyAveraging:
             # Extract position information from tile IDs
             positions = {}
             for tile_id, data in tile_data.items():
-                # Parse: mask_<idx>_y<y_start>_x<x_start>
+                # Parse: mask_<idx>_y<y_start>_x<x_start> or img_<idx>_y<y_start>_x<x_start>
                 parts = tile_id.split('_')
                 if len(parts) >= 4:
                     y_start = int(parts[2][1:])  # Remove 'y' prefix
@@ -673,6 +732,10 @@ class DailyAveraging:
                 oc3_masked = oc3_masked[:min_h, :min_w]
                 khoa_masked = khoa_masked[:min_h, :min_w]
 
+            # Clip both datasets to valid chlorophyll range before calculating difference
+            oc3_masked = self.clip_chlorophyll_range(oc3_masked, min_val=0.01, max_val=10.0)
+            khoa_masked = self.clip_chlorophyll_range(khoa_masked, min_val=0.01, max_val=10.0)
+
             difference = np.where(
                 (~np.isnan(oc3_masked)) & (~np.isnan(khoa_masked)),
                 oc3_masked - khoa_masked,
@@ -869,30 +932,65 @@ class DailyAveraging:
                 else:
                     logger.warning(f"Could not apply interpolated UST mask: shape {ust_mask_interp.shape if ust_mask_interp is not None else 'None'} != {khoa_masked.shape}")
 
-            # Create comparison figure (OC3 standard resolution: 5685x5566)
-            fig = plt.figure(figsize=(20, 7), dpi=150)
-            gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 1])
+            # GOCI coordinate bounds (from HDF5 metadata)
+            # Geographic coordinates for full GOCI image (5685 x 5566 pixels)
+            lat_min, lat_max = 7.125, 54.527
+            lon_min, lon_max = 87.909, 172.091
+
+            # Calculate extent based on actual data shape to maintain pixel correspondence
+            # extent = [left, right, bottom, top] for imshow with origin='upper'
+            # Adjust extent to match the actual cropped data shape
+            data_height, data_width = oc3_masked.shape
+            full_goci_height, full_goci_width = 5685, 5566
+
+            # Scale the geographic extent to match the actual data size
+            lat_range = lat_max - lat_min
+            lon_range = lon_max - lon_min
+
+            # Calculate extent for the actual data (may be cropped)
+            extent = [
+                lon_min,  # left
+                lon_min + (lon_range * data_width / full_goci_width),  # right
+                lat_min + (lat_range * (full_goci_height - data_height) / full_goci_height),  # bottom (adjusted for cropping from top)
+                lat_min + (lat_range * full_goci_height / full_goci_height)  # top
+            ]
+
+            # Calculate aspect ratio to preserve image dimensions
+            extent_width = extent[1] - extent[0]  # degrees longitude
+            extent_height = extent[3] - extent[2]  # degrees latitude
+            pixel_aspect = data_width / data_height
+            geo_aspect = extent_width / extent_height
+            aspect_ratio = geo_aspect / pixel_aspect
+
+            # Create comparison figure with 3 columns
+            fig = plt.figure(figsize=(20, 6), dpi=150)
+            gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 1], wspace=0.3)
 
             # Column 1: OC3 data
             ax1 = fig.add_subplot(gs[0, 0])
             valid_oc3 = oc3_masked[~np.isnan(oc3_masked)]
             if len(valid_oc3) > 0:
-                vmin_oc3 = np.nanmin(oc3_masked)
-                vmax_oc3 = np.nanmax(oc3_masked)
-                vmax_oc3 = max(vmax_oc3, 0.01)  # Avoid zero range
-                im1 = ax1.imshow(oc3_masked, cmap='viridis',
-                                vmin=vmin_oc3, vmax=vmax_oc3, origin='upper', interpolation='nearest')
+                # For display: set values >=10 to 0, and NaN values to 0
+                oc3_display = oc3_masked.copy()
+                oc3_display[oc3_display >= 10.0] = 0.0
+                oc3_display[np.isnan(oc3_display)] = 0.0  # NaN values shown as 0 (dark purple)
+
+                vmin_oc3 = 0.0
+                vmax_oc3 = 10.0
+                im1 = ax1.imshow(oc3_display, cmap='viridis',
+                                vmin=vmin_oc3, vmax=vmax_oc3, origin='upper', interpolation='nearest',
+                                extent=extent, aspect=aspect_ratio)
                 ax1.set_title(f'OC3 Daily Chlorophyll\n({oc3_data.shape[0]}×{oc3_data.shape[1]})')
-                ax1.set_xlabel('Longitude pixel')
-                ax1.set_ylabel('Latitude pixel')
+                ax1.set_xlabel('Longitude (°E)', fontsize=11)
+                ax1.set_ylabel('Latitude (°N)', fontsize=11)
                 cbar1 = plt.colorbar(im1, ax=ax1, label='mg/m³', shrink=0.8)
 
-                # Overlay land mask as gray
+                # Overlay land mask as light gray
                 if oc3_land_mask_bool is not None:
                     land_overlay = np.ma.masked_where(~oc3_land_mask_bool,
-                                                     np.ones_like(oc3_land_mask_bool, dtype=float) * 0.5)
+                                                     np.ones_like(oc3_land_mask_bool, dtype=float))
                     ax1.imshow(land_overlay, cmap='gray', vmin=0, vmax=1,
-                             origin='upper', interpolation='none', alpha=0.6)
+                             origin='upper', interpolation='none', extent=extent, aspect=aspect_ratio, alpha=1.0)
 
             # Column 2: KHOA aligned to OC3
             ax2 = fig.add_subplot(gs[0, 1])
@@ -902,10 +1000,11 @@ class DailyAveraging:
                 vmax_khoa = np.nanmax(khoa_masked)
                 vmax_khoa = max(vmax_khoa, 0.01)
                 im2 = ax2.imshow(khoa_masked, cmap='viridis',
-                                vmin=vmin_khoa, vmax=vmax_khoa, origin='upper', interpolation='nearest')
+                                vmin=vmin_khoa, vmax=vmax_khoa, origin='upper', interpolation='nearest',
+                                extent=extent, aspect=aspect_ratio)
                 ax2.set_title(f'KHOA Daily (Aligned to OC3)\n({khoa_aligned.shape[0]}×{khoa_aligned.shape[1]})')
-                ax2.set_xlabel('Longitude pixel')
-                ax2.set_ylabel('Latitude pixel')
+                ax2.set_xlabel('Longitude (°E)', fontsize=11)
+                ax2.set_ylabel('Latitude (°N)', fontsize=11)
                 cbar2 = plt.colorbar(im2, ax=ax2, label='mg/m³', shrink=0.8)
 
                 # Overlay land mask as gray
@@ -913,7 +1012,7 @@ class DailyAveraging:
                     land_overlay = np.ma.masked_where(~khoa_land_mask_bool,
                                                      np.ones_like(khoa_land_mask_bool, dtype=float) * 0.5)
                     ax2.imshow(land_overlay, cmap='gray', vmin=0, vmax=1,
-                             origin='upper', interpolation='none', alpha=0.6)
+                             origin='upper', interpolation='none', extent=extent, aspect=aspect_ratio, alpha=0.6)
 
             # Column 3: Difference map
             ax3 = fig.add_subplot(gs[0, 2])
@@ -950,7 +1049,7 @@ class DailyAveraging:
                         rgb_data[khoa_land_mask_bool] = [0.5, 0.5, 0.5]
 
                     # Display RGB image
-                    ax3.imshow(rgb_data, origin='upper', interpolation='none')
+                    ax3.imshow(rgb_data, origin='upper', interpolation='none', extent=extent, aspect=aspect_ratio)
 
                     # Colorbar
                     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
@@ -959,8 +1058,8 @@ class DailyAveraging:
 
                     # Title and labels
                     ax3.set_title(f'OC3 - KHOA Difference\n({difference_map.shape[0]}×{difference_map.shape[1]})')
-                    ax3.set_xlabel('Longitude pixel')
-                    ax3.set_ylabel('Latitude pixel')
+                    ax3.set_xlabel('Longitude (°E)', fontsize=11)
+                    ax3.set_ylabel('Latitude (°N)', fontsize=11)
 
                     # Statistics annotation
                     diff_stats_text = f'Mean: {np.nanmean(difference_map):.4f}\nStd: {np.nanstd(difference_map):.4f}'
@@ -975,13 +1074,13 @@ class DailyAveraging:
                 ax3.axis('off')
 
             # Figure title
-            fig.suptitle(f'Chlorophyll Comparison (OC3-aligned) - {date_str}', fontsize=16, fontweight='bold')
+            fig.suptitle(f'Chlorophyll Comparison (OC3-aligned) - {date_str}', fontsize=16, fontweight='bold', y=0.98)
 
             # Save
             png_filename = f"OC3_KHOA_comparison_{date_str}.png"
             png_path = self.output_dir / png_filename
-            plt.tight_layout()
-            plt.savefig(png_path, dpi=150, bbox_inches='tight')
+            plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for suptitle
+            plt.savefig(png_path, dpi=150)  # Removed bbox_inches='tight' to preserve aspect ratio
             plt.close()
 
             logger.info(f"Saved OC3-aligned comparison map to {png_path}")
@@ -1001,6 +1100,95 @@ class DailyAveraging:
         """
         pass
 
+
+    def calculate_rmse(self, oc3_data: np.ndarray, khoa_data: np.ndarray) -> Optional[float]:
+        """
+        Calculate linear RMSE between OC3 and KHOA data
+
+        Args:
+            oc3_data: OC3 chlorophyll data
+            khoa_data: KHOA chlorophyll data (must be same shape as oc3_data)
+
+        Returns:
+            RMSE value or None if calculation fails
+        """
+        try:
+            # Ensure same shape
+            if oc3_data.shape != khoa_data.shape:
+                logger.warning(f"Shape mismatch for RMSE: OC3 {oc3_data.shape} vs KHOA {khoa_data.shape}")
+                return None
+
+            # Clip both datasets to valid chlorophyll range
+            oc3_data = self.clip_chlorophyll_range(oc3_data, min_val=0.01, max_val=10.0)
+            khoa_data = self.clip_chlorophyll_range(khoa_data, min_val=0.01, max_val=10.0)
+
+            # Find valid pixels (non-NaN in both)
+            valid_mask = ~np.isnan(oc3_data) & ~np.isnan(khoa_data)
+
+            if not np.any(valid_mask):
+                logger.warning("No valid pixels for RMSE calculation")
+                return None
+
+            # Calculate RMSE on valid pixels
+            oc3_valid = oc3_data[valid_mask]
+            khoa_valid = khoa_data[valid_mask]
+
+            rmse = np.sqrt(np.mean((oc3_valid - khoa_valid) ** 2))
+
+            logger.info(f"Linear RMSE calculated: {rmse:.4f} mg/m³ (valid pixels: {np.sum(valid_mask)})")
+            return rmse
+
+        except Exception as e:
+            logger.error(f"Error calculating RMSE: {e}")
+            return None
+
+    def calculate_log_rmse(self, oc3_data: np.ndarray, khoa_data: np.ndarray) -> Optional[float]:
+        """
+        Calculate log-scale RMSE between OC3 and KHOA data
+        This is more appropriate for chlorophyll-a comparisons as it reduces
+        the influence of high values and is more scientifically standard
+
+        Args:
+            oc3_data: OC3 chlorophyll data
+            khoa_data: KHOA chlorophyll data (must be same shape as oc3_data)
+
+        Returns:
+            Log-scale RMSE value or None if calculation fails
+        """
+        try:
+            # Ensure same shape
+            if oc3_data.shape != khoa_data.shape:
+                logger.warning(f"Shape mismatch for log RMSE: OC3 {oc3_data.shape} vs KHOA {khoa_data.shape}")
+                return None
+
+            # Clip both datasets to valid chlorophyll range
+            oc3_data = self.clip_chlorophyll_range(oc3_data, min_val=0.01, max_val=10.0)
+            khoa_data = self.clip_chlorophyll_range(khoa_data, min_val=0.01, max_val=10.0)
+
+            # Find valid pixels (non-NaN in both)
+            valid_mask = ~np.isnan(oc3_data) & ~np.isnan(khoa_data)
+
+            if not np.any(valid_mask):
+                logger.warning("No valid pixels for log RMSE calculation")
+                return None
+
+            # Calculate log-scale RMSE on valid pixels
+            oc3_valid = oc3_data[valid_mask]
+            khoa_valid = khoa_data[valid_mask]
+
+            # Log10 transformation
+            log_oc3 = np.log10(oc3_valid)
+            log_khoa = np.log10(khoa_valid)
+
+            # Calculate RMSE in log space
+            log_rmse = np.sqrt(np.mean((log_oc3 - log_khoa) ** 2))
+
+            logger.info(f"Log-scale RMSE calculated: {log_rmse:.6f} (valid pixels: {np.sum(valid_mask)})")
+            return log_rmse
+
+        except Exception as e:
+            logger.error(f"Error calculating log RMSE: {e}")
+            return None
 
     def process_date(self, date_str: str) -> bool:
         """
@@ -1040,10 +1228,31 @@ class DailyAveraging:
 
         logger.info(f"Difference map shape: {difference_map.shape}")
 
-        # Step 4: Save OC3-aligned comparison visualization
+        # Step 4: Calculate RMSE (log-scale only)
+        # Align KHOA to OC3 resolution first
+        khoa_aligned = self.align_khoa_to_oc3_resolution(oc3_daily, khoa_daily)
+        if khoa_aligned is not None:
+            # Calculate log-scale RMSE (standard for chlorophyll comparison)
+            log_rmse = self.calculate_log_rmse(oc3_daily, khoa_aligned)
+
+            if log_rmse is not None:
+                # Save log RMSE to CSV file
+                rmse_csv_path = self.output_dir / "rmse_results.csv"
+
+                # Check if file exists to determine if we need to write header
+                write_header = not rmse_csv_path.exists()
+
+                with open(rmse_csv_path, 'a') as f:
+                    if write_header:
+                        f.write("date,rmse\n")
+                    f.write(f"{date_str},{log_rmse:.6f}\n")
+
+                logger.info(f"Log-scale RMSE saved to {rmse_csv_path}: {log_rmse:.6f}")
+
+        # Step 5: Save OC3-aligned comparison visualization
         self.save_oc3_aligned_comparison_as_png(date_str, oc3_daily, khoa_daily, difference_map)
 
-        # Step 5: Also save standalone difference map
+        # Step 6: Also save standalone difference map
         self.save_difference_map_as_png(date_str, difference_map)
 
         logger.info(f"Successfully processed {date_str}")
@@ -1079,6 +1288,43 @@ class DailyAveraging:
 
         # logger.info(f"Processing complete: {successful}/{total_days} successful, {failed}/{total_days} failed")
 
+        # Calculate and save average RMSE
+        self.calculate_and_save_average_rmse()
+
+    def calculate_and_save_average_rmse(self):
+        """
+        Calculate average RMSE from all processed dates and append to CSV
+        """
+        rmse_csv_path = self.output_dir / "rmse_results.csv"
+
+        if not rmse_csv_path.exists():
+            logger.warning("No RMSE results file found")
+            return
+
+        try:
+            # Read RMSE results
+            import pandas as pd
+            df = pd.read_csv(rmse_csv_path)
+
+            if 'rmse' not in df.columns or len(df) == 0:
+                logger.warning("No RMSE data found in CSV")
+                return
+
+            # Calculate average
+            avg_rmse = df['rmse'].mean()
+
+            # Append average to CSV
+            with open(rmse_csv_path, 'a') as f:
+                f.write(f"\nAverage,{avg_rmse:.6f}\n")
+
+            logger.info(f"Average RMSE calculated and saved: {avg_rmse:.6f}")
+            print(f"\n{'='*60}")
+            print(f"OVERALL AVERAGE RMSE: {avg_rmse:.6f}")
+            print(f"{'='*60}")
+
+        except Exception as e:
+            logger.error(f"Error calculating average RMSE: {e}")
+
 
 def main():
     """Main function"""
@@ -1088,7 +1334,7 @@ def main():
         description='Daily averaging of OC3 chlorophyll and difference map calculation'
     )
     parser.add_argument('--oc3_dir', required=True,
-                       help='Directory containing hourly OC3 results')
+                       help='Directory containing OC3 results (hourly or daily)')
     parser.add_argument('--khoa_dir', required=True,
                        help='Directory containing KHOA daily chlorophyll files')
     parser.add_argument('--output_dir', required=True,
@@ -1097,6 +1343,8 @@ def main():
                        help='Path to GOCI land mask file')
     parser.add_argument('--ust_land_mask',
                        help='Path to UST21 land mask file')
+    parser.add_argument('--daily_mode', action='store_true', default=True,
+                       help='Process daily-averaged OC3 results (default: True)')
     parser.add_argument('--date',
                        help='Single date to process (YYYYMMDD format)')
     parser.add_argument('--start_date',
@@ -1114,7 +1362,8 @@ def main():
     # Initialize processor
     processor = DailyAveraging(args.oc3_dir, args.khoa_dir, args.output_dir,
                               goci_land_mask_path=args.goci_land_mask,
-                              ust_land_mask_path=args.ust_land_mask)
+                              ust_land_mask_path=args.ust_land_mask,
+                              daily_mode=args.daily_mode)
 
     # Process dates
     if args.start_date and args.end_date:

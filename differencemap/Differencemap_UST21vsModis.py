@@ -55,11 +55,86 @@ class UST21ModisDifferenceMap:
             self.ust_land_mask = np.load(ust_land_mask_path)
             logger.info(f"Loaded UST21 land mask: {self.ust_land_mask.shape}")
 
+    def load_ust21_single_day(self, date_str: str) -> Optional[np.ndarray]:
+        """
+        Load single day chlorophyll from UST21 test/degree directory
+
+        Args:
+            date_str: Date in YYYYMMDD format
+
+        Returns:
+            Single day chlorophyll array (8000x10500) or None
+        """
+        try:
+            year = date_str[:4]
+            test_base_path = Path(str(self.ust21_perf_dir).replace('/performance/', '/test/'))
+            recon_dir = test_base_path.parent / year / date_str / 'degree' / 'recon'
+
+            if not recon_dir.exists():
+                logger.warning(f"UST21 test/degree/recon directory not found: {recon_dir}")
+                return None
+
+            csv_files = sorted(glob.glob(str(recon_dir / '*.csv')))
+            if not csv_files:
+                logger.warning(f"No CSV files found in {recon_dir}")
+                return None
+
+            # Dictionary to store tiles by position
+            tile_data_by_position = {}
+
+            for csv_file in csv_files:
+                try:
+                    filename = Path(csv_file).stem
+                    parts = filename.split('_')
+
+                    if len(parts) >= 4:
+                        y_pos = int(parts[2][1:])
+                        x_pos = int(parts[3][1:])
+                        data = np.loadtxt(csv_file, delimiter=',', dtype=np.float32)
+
+                        if data.shape != (256, 256):
+                            continue
+
+                        pos_key = (y_pos, x_pos)
+                        if pos_key not in tile_data_by_position:
+                            tile_data_by_position[pos_key] = []
+                        tile_data_by_position[pos_key].append(data)
+
+                except Exception as e:
+                    logger.warning(f"Failed to load {csv_file}: {e}")
+                    continue
+
+            if not tile_data_by_position:
+                return None
+
+            # Find grid dimensions
+            y_positions = [pos[0] for pos in tile_data_by_position.keys()]
+            x_positions = [pos[1] for pos in tile_data_by_position.keys()]
+            max_y = max(y_positions) + 256
+            max_x = max(x_positions) + 256
+
+            # Initialize full grid
+            full_grid = np.full((max_y, max_x), np.nan, dtype=np.float32)
+
+            # Fill in tiles
+            for (y_pos, x_pos), tile_list in tile_data_by_position.items():
+                y_end = y_pos + 256
+                x_end = x_pos + 256
+                stacked_tiles = np.stack(tile_list, axis=0)
+                averaged_tile = np.nanmean(stacked_tiles, axis=0)
+                valid_mask = ~np.isnan(averaged_tile)
+                full_grid[y_pos:y_end, x_pos:x_end][valid_mask] = averaged_tile[valid_mask]
+
+            return full_grid.astype(np.float32)
+
+        except Exception as e:
+            logger.error(f"Error loading UST21 data for {date_str}: {e}")
+            return None
+
     def load_ust21_8day_average(self, start_date: str) -> Optional[np.ndarray]:
         """
         Load 8-day averaged chlorophyll from UST21 test/degree directory
-        Reconstructs full 8000x10500 image from 256x256 tiles
-        Uses file names to determine tile positions and assembles them
+        Loads data from start_date to start_date+7 days and averages them pixel-wise
 
         Args:
             start_date: Start date in YYYYMMDD format
@@ -68,101 +143,42 @@ class UST21ModisDifferenceMap:
             8-day averaged chlorophyll array (8000x10500) or None
         """
         try:
-            # Use test directory instead of performance directory
-            # Path: /myhdd/UST21/test/YYYY/YYYYMMDD/degree/recon/
-            year = start_date[:4]  # Extract YYYY from YYYYMMDD
-            test_base_path = Path(str(self.ust21_perf_dir).replace('/performance/', '/test/'))
-            recon_dir = test_base_path.parent / year / start_date / 'degree' / 'recon'
+            from datetime import datetime, timedelta
 
-            logger.info(f"Looking for recon data in: {recon_dir}")
+            # Generate 8 consecutive dates
+            start_dt = datetime.strptime(start_date, '%Y%m%d')
+            date_list = [(start_dt + timedelta(days=i)).strftime('%Y%m%d') for i in range(8)]
 
-            if not recon_dir.exists():
-                logger.warning(f"UST21 test/degree/recon directory not found: {recon_dir}")
+            logger.info(f"Loading UST21 data for 8-day average: {date_list[0]} to {date_list[-1]}")
+
+            # Load all 8 days
+            daily_grids = []
+            for date_str in date_list:
+                daily_grid = self.load_ust21_single_day(date_str)
+                if daily_grid is not None:
+                    daily_grids.append(daily_grid)
+                    logger.info(f"  Loaded {date_str}: shape={daily_grid.shape}, valid pixels={np.sum(~np.isnan(daily_grid))}")
+                else:
+                    logger.warning(f"  Failed to load {date_str}")
+
+            if not daily_grids:
+                logger.error(f"No valid daily data loaded for 8-day period starting {start_date}")
                 return None
 
-            # Load CSV files from recon subdirectory
-            csv_files = sorted(glob.glob(str(recon_dir / '*.csv')))
+            logger.info(f"Loaded {len(daily_grids)}/{len(date_list)} days for 8-day average")
 
-            if not csv_files:
-                logger.warning(f"No CSV files found in {recon_dir}")
-                return None
+            # Stack and average across days
+            stacked_grids = np.stack(daily_grids, axis=0)  # Shape: (n_days, height, width)
+            averaged_grid = np.nanmean(stacked_grids, axis=0)  # Average across days
 
-            logger.info(f"Found {len(csv_files)} recon CSV tiles for {start_date}")
+            logger.info(f"UST21 8-day averaged data shape: {averaged_grid.shape}")
+            logger.info(f"Valid data pixels: {np.sum(~np.isnan(averaged_grid))}")
+            logger.info(f"Data range: min={np.nanmin(averaged_grid):.4f}, max={np.nanmax(averaged_grid):.4f}, mean={np.nanmean(averaged_grid):.4f}")
 
-            # Dictionary to store tiles by position - multiple tiles per position for 8-day average
-            # Key: (y_pos, x_pos), Value: list of tile data arrays
-            tile_data_by_position = {}
-
-            for csv_file in csv_files:
-                try:
-                    # Parse filename: img_XXXX_yYYYY_xXXXX.csv
-                    filename = Path(csv_file).stem  # Remove .csv extension
-                    parts = filename.split('_')
-
-                    if len(parts) >= 4:
-                        y_pos = int(parts[2][1:])  # Remove 'y' prefix
-                        x_pos = int(parts[3][1:])  # Remove 'x' prefix
-
-                        data = np.loadtxt(csv_file, delimiter=',', dtype=np.float32)
-
-                        if data.shape != (256, 256):
-                            logger.warning(f"Unexpected tile size {data.shape} in {csv_file}, expected (256, 256)")
-                            continue
-
-                        # Store tile data - same position may have multiple tiles (from different hours/days)
-                        pos_key = (y_pos, x_pos)
-                        if pos_key not in tile_data_by_position:
-                            tile_data_by_position[pos_key] = []
-                        tile_data_by_position[pos_key].append(data)
-                    else:
-                        logger.warning(f"Could not parse tile position from {filename}")
-
-                except Exception as e:
-                    logger.warning(f"Failed to load {csv_file}: {e}")
-                    continue
-
-            if not tile_data_by_position:
-                logger.warning(f"No valid tile data loaded for {start_date}")
-                return None
-
-            logger.info(f"Loaded {sum(len(v) for v in tile_data_by_position.values())} tiles " +
-                       f"for {len(tile_data_by_position)} unique positions")
-
-            # Find full grid dimensions
-            y_positions = [pos[0] for pos in tile_data_by_position.keys()]
-            x_positions = [pos[1] for pos in tile_data_by_position.keys()]
-
-            max_y = max(y_positions) + 256
-            max_x = max(x_positions) + 256
-
-            logger.info(f"Reconstructing full grid: {max_y} x {max_x} from {len(tile_data_by_position)} tile positions")
-
-            # Initialize full grid with NaN
-            full_grid = np.full((max_y, max_x), np.nan, dtype=np.float32)
-            tile_count = np.zeros((max_y, max_x), dtype=np.float32)
-
-            # Fill in tiles and accumulate for averaging
-            for (y_pos, x_pos), tile_list in tile_data_by_position.items():
-                y_end = y_pos + 256
-                x_end = x_pos + 256
-
-                # Stack all tiles at this position
-                stacked_tiles = np.stack(tile_list, axis=0)  # Shape: (n_tiles, 256, 256)
-
-                # Average tiles at this position
-                averaged_tile = np.nanmean(stacked_tiles, axis=0)
-
-                # Only set non-NaN values
-                valid_mask = ~np.isnan(averaged_tile)
-                full_grid[y_pos:y_end, x_pos:x_end][valid_mask] = averaged_tile[valid_mask]
-
-            logger.info(f"UST21 8-day averaged reconstructed data shape: {full_grid.shape}")
-            logger.info(f"Valid data pixels: {np.sum(~np.isnan(full_grid))}")
-
-            return full_grid.astype(np.float32)
+            return averaged_grid.astype(np.float32)
 
         except Exception as e:
-            logger.error(f"Error loading UST21 data for {start_date}: {e}")
+            logger.error(f"Error loading UST21 8-day average for {start_date}: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -604,13 +620,16 @@ class UST21ModisDifferenceMap:
                                    vmin: float = -10,
                                    vmax: float = 10):
         """
-        Save difference map as PNG
+        Save difference map as PNG and return RMSE
 
         Args:
-            period_str: Period string (e.g., "0108" for 01~08)
+            period_str: Period string (e.g., "20201201_20201208" for 01~08)
             difference: Difference map array
             vmin: Minimum colormap value (default: -10 mg/m³)
             vmax: Maximum colormap value (default: 10 mg/m³)
+
+        Returns:
+            RMSE value or None
         """
         try:
             png_filename = f"UST21_MODIS_difference_{period_str}.png"
@@ -620,16 +639,20 @@ class UST21ModisDifferenceMap:
             valid_data = difference[~np.isnan(difference)]
             if len(valid_data) == 0:
                 logger.warning(f"No valid data in difference map for {period_str}")
-                return
+                return None
 
             actual_min = np.nanmin(difference)
             actual_max = np.nanmax(difference)
             actual_mean = np.nanmean(difference)
             actual_std = np.nanstd(difference)
 
+            # Calculate RMSE
+            rmse = np.sqrt(np.nanmean(difference ** 2))
+
             logger.info(f"Difference map statistics:")
             logger.info(f"  Min: {actual_min:.4f}, Max: {actual_max:.4f}")
             logger.info(f"  Mean: {actual_mean:.4f}, Std: {actual_std:.4f}")
+            logger.info(f"  RMSE: {rmse:.4f}")
 
             # Create figure
             fig, ax = plt.subplots(figsize=(14, 10), dpi=150)
@@ -661,24 +684,45 @@ class UST21ModisDifferenceMap:
             # Create extended colormap with gray for land (-999 values)
             # We'll handle this by plotting in two steps
 
+            # UST21 coordinate bounds (from NetCDF metadata)
+            # Upper left: 23.17°N, 150.855°E
+            # Lower right: 49.1579°N, 111.604°E
+            lat_min, lat_max = 23.17, 49.1579
+            lon_min, lon_max = 111.604, 150.855
+
+            # Get image dimensions
+            height, width = difference.shape
+
+            # extent = [left, right, bottom, top] for imshow with origin='upper'
+            # left = lon_min, right = lon_max, bottom = lat_min, top = lat_max
+            extent = [lon_min, lon_max, lat_min, lat_max]
+
+            # Calculate aspect ratio to preserve image dimensions
+            # aspect = (extent_width / extent_height) / (pixel_width / pixel_height)
+            extent_width = lon_max - lon_min  # degrees longitude
+            extent_height = lat_max - lat_min  # degrees latitude
+            pixel_aspect = width / height
+            geo_aspect = extent_width / extent_height
+            aspect_ratio = geo_aspect / pixel_aspect
+
             # First, plot the land as gray
             im = ax.imshow(vis_data, cmap='RdBu_r', vmin=vmin, vmax=vmax,
-                          origin='upper', interpolation='none')
+                          origin='upper', interpolation='none', extent=extent, aspect=aspect_ratio)
 
             # Overlay gray for land pixels
             gray_data = np.where(land_mask, 1, np.nan)
             ax.imshow(gray_data, cmap='gray', vmin=0, vmax=1,
-                     origin='upper', interpolation='none', alpha=0.7)
+                     origin='upper', interpolation='none', extent=extent, aspect=aspect_ratio, alpha=0.7)
 
             # Colorbar
             cbar = plt.colorbar(im, ax=ax, label='Chlorophyll difference (mg/m³)', shrink=0.8)
 
             # Labels and title
-            ax.set_xlabel('Longitude index')
-            ax.set_ylabel('Latitude index')
+            ax.set_xlabel('Longitude (°E)', fontsize=12)
+            ax.set_ylabel('Latitude (°N)', fontsize=12)
             ax.set_title(f'UST21 - MODIS Chlorophyll Difference Map\nPeriod: {period_str}\n' +
-                        f'Mean: {actual_mean:.4f} mg/m³, Std: {actual_std:.4f} mg/m³\n' +
-                        f'(White: 0 difference, Gray: land)')
+                        f'RMSE: {rmse:.4f} mg/m³, Mean: {actual_mean:.4f} mg/m³, Std: {actual_std:.4f} mg/m³\n' +
+                        f'(White: 0 difference, Gray: land)', fontsize=12)
 
             # Save
             plt.tight_layout()
@@ -688,8 +732,11 @@ class UST21ModisDifferenceMap:
             logger.info(f"Saved difference map PNG to {png_path}")
             logger.info(f"Color scheme: Red-Blue for difference values, White for 0-difference, Gray for land")
 
+            return rmse
+
         except Exception as e:
             logger.error(f"Error saving difference map as PNG: {e}")
+            return None
 
     def save_modis_crop_visualization(self,
                                      period_str: str,
@@ -789,6 +836,19 @@ class UST21ModisDifferenceMap:
             # Create figure with 3 subplots
             fig, axes = plt.subplots(1, 3, figsize=(20, 6), dpi=150)
 
+            # UST21 coordinate bounds (from NetCDF metadata)
+            lat_min, lat_max = 23.17, 49.1579
+            lon_min, lon_max = 111.604, 150.855
+            extent = [lon_min, lon_max, lat_min, lat_max]
+
+            # Calculate aspect ratio to preserve image dimensions
+            height, width = ust21_masked.shape
+            extent_width = lon_max - lon_min  # degrees longitude
+            extent_height = lat_max - lat_min  # degrees latitude
+            pixel_aspect = width / height
+            geo_aspect = extent_width / extent_height
+            aspect_ratio = geo_aspect / pixel_aspect
+
             # Get common scaling for UST21 and MODIS (0-10 mg/m³)
             valid_ust21 = ust21_masked[~np.isnan(ust21_masked)]
             valid_modis = modis_masked[~np.isnan(modis_masked)]
@@ -799,27 +859,27 @@ class UST21ModisDifferenceMap:
 
                 # UST21 map (0-10 mg/m³)
                 im1 = axes[0].imshow(np.ma.masked_invalid(ust21_masked), cmap='viridis',
-                                    vmin=chl_vmin, vmax=chl_vmax, origin='upper')
+                                    vmin=chl_vmin, vmax=chl_vmax, origin='upper', extent=extent, aspect=aspect_ratio)
                 axes[0].set_title('UST21 Chlorophyll')
-                axes[0].set_xlabel('Longitude index')
-                axes[0].set_ylabel('Latitude index')
+                axes[0].set_xlabel('Longitude (°E)')
+                axes[0].set_ylabel('Latitude (°N)')
                 plt.colorbar(im1, ax=axes[0], label='mg/m³')
 
                 # MODIS map (0-10 mg/m³)
                 im2 = axes[1].imshow(np.ma.masked_invalid(modis_masked), cmap='viridis',
-                                    vmin=chl_vmin, vmax=chl_vmax, origin='upper')
+                                    vmin=chl_vmin, vmax=chl_vmax, origin='upper', extent=extent, aspect=aspect_ratio)
                 axes[1].set_title('MODIS Chlorophyll')
-                axes[1].set_xlabel('Longitude index')
-                axes[1].set_ylabel('Latitude index')
+                axes[1].set_xlabel('Longitude (°E)')
+                axes[1].set_ylabel('Latitude (°N)')
                 plt.colorbar(im2, ax=axes[1], label='mg/m³')
 
                 # Difference map (-10~10 mg/m³)
                 difference = ust21_masked - modis_masked
                 im3 = axes[2].imshow(np.ma.masked_invalid(difference), cmap='RdBu_r',
-                                    vmin=-10, vmax=10, origin='upper')
+                                    vmin=-10, vmax=10, origin='upper', extent=extent, aspect=aspect_ratio)
                 axes[2].set_title('UST21 - MODIS Difference')
-                axes[2].set_xlabel('Longitude index')
-                axes[2].set_ylabel('Latitude index')
+                axes[2].set_xlabel('Longitude (°E)')
+                axes[2].set_ylabel('Latitude (°N)')
                 plt.colorbar(im3, ax=axes[2], label='mg/m³')
 
                 fig.suptitle(f'Chlorophyll Comparison (Period: {period_str})', fontsize=14)
@@ -835,7 +895,7 @@ class UST21ModisDifferenceMap:
         except Exception as e:
             logger.error(f"Error saving comparison map: {e}")
 
-    def process_8day_period(self, start_date: str) -> bool:
+    def process_8day_period(self, start_date: str):
         """
         Process a single 8-day period
 
@@ -843,22 +903,23 @@ class UST21ModisDifferenceMap:
             start_date: Start date in YYYYMMDD format
 
         Returns:
-            True if successful, False otherwise
+            (success: bool, rmse: float or None, period_str: str)
         """
         logger.info(f"Processing 8-day period starting from {start_date}")
 
         # Calculate end date (8 days later)
         from datetime import datetime, timedelta
         date_obj = datetime.strptime(start_date, '%Y%m%d')
-        end_date = date_obj + timedelta(days=7)
-        period_str = f"{start_date[4:8]}{(date_obj + timedelta(days=7)).strftime('%m%d')}"
+        end_date_obj = date_obj + timedelta(days=7)
+        end_date = end_date_obj.strftime('%Y%m%d')
+        period_str = f"{start_date}_{end_date}"
 
         try:
             # Load UST21 data
             ust21_data = self.load_ust21_8day_average(start_date)
             if ust21_data is None:
                 logger.error(f"Failed to load UST21 data for {start_date}")
-                return False
+                return False, None, period_str
 
             logger.info(f"UST21 data shape: {ust21_data.shape}")
 
@@ -866,7 +927,7 @@ class UST21ModisDifferenceMap:
             modis_data = self.load_modis_8day_average(start_date)
             if modis_data is None:
                 logger.error(f"Failed to load MODIS data for {start_date}")
-                return False
+                return False, None, period_str
 
             logger.info(f"MODIS data shape (original): {modis_data.shape}")
 
@@ -874,7 +935,7 @@ class UST21ModisDifferenceMap:
             modis_cropped, crop_info = self.crop_and_align_modis_to_ust21(modis_data, ust21_data)
             if modis_cropped is None:
                 logger.error(f"Failed to crop and align MODIS data")
-                return False
+                return False, None, period_str
 
             logger.info(f"MODIS data shape (final): {modis_cropped.shape}")
 
@@ -899,21 +960,21 @@ class UST21ModisDifferenceMap:
             difference = self.calculate_difference_map(ust21_data, modis_interpolated)
             if difference is None:
                 logger.error(f"Failed to calculate difference map")
-                return False
+                return False, None, period_str
 
-            # Save visualizations
-            self.save_difference_map_as_png(period_str, difference)
+            # Save visualizations and get RMSE
+            rmse = self.save_difference_map_as_png(period_str, difference)
             self.save_comparison_map_as_png(period_str, ust21_data, modis_interpolated)
             self.save_modis_crop_visualization(period_str, modis_data, crop_info)
 
             logger.info(f"Successfully processed period {period_str}")
-            return True
+            return True, rmse, period_str
 
         except Exception as e:
             logger.error(f"Error processing 8-day period for {start_date}: {e}")
             import traceback
             traceback.print_exc()
-            return False
+            return False, None, period_str
 
 
 def main():
@@ -963,10 +1024,18 @@ def main():
 
     success_count = 0
     failed_count = 0
+    rmse_results = []  # Store RMSE results for each period
 
     for date_str in target_dates:
-        if processor.process_8day_period(date_str):
+        success, rmse, period_str = processor.process_8day_period(date_str)
+        if success:
             success_count += 1
+            if rmse is not None:
+                rmse_results.append({
+                    'period': period_str,
+                    'start_date': date_str,
+                    'rmse': rmse
+                })
         else:
             failed_count += 1
 
@@ -978,6 +1047,34 @@ def main():
     print(f"Successfully processed: {success_count}")
     print(f"Failed: {failed_count}")
     print(f"Results saved to: {args.output_dir}")
+
+    # Save RMSE results to CSV
+    if rmse_results:
+        import csv
+        csv_path = Path(args.output_dir) / 'rmse_summary.csv'
+
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Period', 'Start_Date', 'RMSE (mg/m³)'])
+
+            for result in rmse_results:
+                writer.writerow([result['period'], result['start_date'], f"{result['rmse']:.6f}"])
+
+            # Calculate and write average RMSE
+            avg_rmse = np.mean([r['rmse'] for r in rmse_results])
+            writer.writerow([])
+            writer.writerow(['Average', '', f"{avg_rmse:.6f}"])
+
+        print(f"\n{'='*60}")
+        print(f"RMSE STATISTICS")
+        print(f"{'='*60}")
+        print(f"Average RMSE: {avg_rmse:.6f} mg/m³")
+        print(f"RMSE summary saved to: {csv_path}")
+
+        # Print individual period RMSE values
+        print(f"\nPer-period RMSE values:")
+        for result in rmse_results:
+            print(f"  {result['period']}: {result['rmse']:.6f} mg/m³")
 
 
 if __name__ == '__main__':

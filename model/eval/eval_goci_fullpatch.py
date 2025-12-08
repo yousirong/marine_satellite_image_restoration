@@ -543,8 +543,11 @@ if __name__ == '__main__':
 
     # 2. 데이터 경로 설정
     base_data_dir = '/media/juneyonglee/My Book1/Preprocessed/GOCI_tiles_daily/band4/2021'
-    base_result = '/home/juneyonglee/myhdd/GOCI_RRS/daily_results/band4'
+    base_result = '/home/juneyonglee/myhdd/GOCI_RRS/daily_results/band4_daily'
     land_sea_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy'
+
+    # 월 필터링 설정 (None이면 모든 월 처리, [1]이면 1월만, [1,2]면 1월과 2월만)
+    target_months = [1]  # 1월만 처리
 
     print("="*80)
     print("========== FINDING DATES WITH OCEAN MISSING DATA ==========")
@@ -564,6 +567,13 @@ if __name__ == '__main__':
                 date_path = os.path.join(base_data_dir, date_item)
                 if not os.path.isdir(date_path):
                     continue
+
+                # 월 필터링 (YYYYMMDD 형식에서 MM 추출)
+                if target_months is not None and len(date_item) == 8:
+                    month = int(date_item[4:6])
+                    if month not in target_months:
+                        print(f"[INFO] Skipping date {date_item} (month {month} not in target months)")
+                        continue
 
                 print(f"[INFO] Checking date: {date_item}")
                 for time_item in sorted(os.listdir(date_path)):
@@ -598,25 +608,117 @@ if __name__ == '__main__':
         print(f"  - {year}/{date} {time}")
 
     print("\n" + "="*80)
-    print("========== PROCESSING DATES WITH OCEAN MISSING DATA ==========")
+    print("========== PROCESSING DATES WITH DAILY AVERAGING ==========")
     print("="*80)
 
-    # 4. 데이터 처리 루프
-    processed_count = 0
+    # 4. 날짜별로 그룹화 (같은 날짜의 여러 시간대를 묶음)
+    from collections import defaultdict
+    dates_by_day = defaultdict(list)
     for year, date, time in valid_dates:
-        print(f"\n[Main] Processing: {year}/{date} {time} ({processed_count+1}/{len(valid_dates)})")
+        dates_by_day[(year, date)].append(time)
 
-        # 입력 디렉토리 설정
-        if os.path.basename(base_data_dir).isdigit():
-            # base_data_dir가 이미 특정 년도 경로인 경우 (예: .../band3/2021)
-            time_folder = os.path.join(base_data_dir, date, time)
-        else:
-            # base_data_dir가 band3인 경우 (예: .../band3)
-            time_folder = os.path.join(base_data_dir, year, date, time)
+    print(f"\n[SUMMARY] Grouped into {len(dates_by_day)} unique days:")
+    for (year, date), times in sorted(dates_by_day.items()):
+        print(f"  - {year}/{date}: {len(times)} time periods ({', '.join(sorted(times))})")
 
-        # 5. 평가용 데이터셋 생성
+    # 5. 날짜별 처리 루프
+    processed_count = 0
+    for (year, date), times in sorted(dates_by_day.items()):
+        print(f"\n{'='*80}")
+        print(f"[Main] Processing day: {year}/{date} ({processed_count+1}/{len(dates_by_day)})")
+        print(f"[Main] Averaging {len(times)} time periods: {', '.join(sorted(times))}")
+        print(f"{'='*80}")
+
+        # 6. 하루 평균 이미지 생성 디렉토리
+        daily_avg_dir = os.path.join('/tmp/goci_daily_avg', year, date)
+        os.makedirs(daily_avg_dir, exist_ok=True)
+
+        # 7. 타임별 이미지를 픽셀 평균내기
+        print(f"\n[Step 1] Creating daily-averaged images from {len(times)} time periods...")
+
+        # 모든 타임의 TIFF 파일 경로 수집
+        time_folders = []
+        for time in times:
+            if os.path.basename(base_data_dir).isdigit():
+                time_folder = os.path.join(base_data_dir, date, time)
+            else:
+                time_folder = os.path.join(base_data_dir, year, date, time)
+            time_folders.append(time_folder)
+
+        # 각 패치별로 타임 평균 계산
+        patch_files_dict = defaultdict(list)  # {filename: [path1, path2, ...]}
+
+        for time_folder in time_folders:
+            for root, _, fnames in os.walk(time_folder):
+                for f in fnames:
+                    if f.lower().endswith('.tiff'):
+                        # 파일명에서 좌표 추출
+                        m = re.search(r'y(\d+)_x(\d+)', f)
+                        if m:
+                            coord_key = f"y{m.group(1)}_x{m.group(2)}.tiff"
+                            patch_files_dict[coord_key].append(os.path.join(root, f))
+
+        print(f"   Found {len(patch_files_dict)} unique patches across all time periods")
+
+        # 각 패치별 평균 계산 및 저장
+        for coord_key, file_paths in patch_files_dict.items():
+            if len(file_paths) == 0:
+                continue
+
+            # 모든 타임의 이미지 로드
+            images = []
+            valid_masks = []
+
+            for path in file_paths:
+                try:
+                    img = tiff.imread(path).astype(np.float32)
+
+                    # 2D를 3D로 변환
+                    if img.ndim == 2:
+                        img = img[:, :, np.newaxis]
+
+                    # 유효한 픽셀 마스크 생성 (-999, 0, 1000, NaN 제외)
+                    valid_mask = ~((img == -999) | (img == 0) | (img == 1000) | np.isnan(img))
+
+                    images.append(img)
+                    valid_masks.append(valid_mask)
+                except Exception as e:
+                    print(f"   Warning: Failed to load {os.path.basename(path)}: {e}")
+                    continue
+
+            if len(images) == 0:
+                continue
+
+            # 픽셀별 평균 계산 (유효한 픽셀만 사용)
+            images_array = np.stack(images, axis=0)  # (N, H, W, C)
+            valid_masks_array = np.stack(valid_masks, axis=0)  # (N, H, W, C)
+
+            # 유효한 픽셀의 합과 개수 계산
+            valid_sum = np.sum(images_array * valid_masks_array, axis=0)
+            valid_count = np.sum(valid_masks_array, axis=0)
+
+            # 평균 계산 (0으로 나누기 방지)
+            daily_avg = np.zeros_like(images_array[0])
+            mask = valid_count > 0
+            daily_avg[mask] = valid_sum[mask] / valid_count[mask]
+
+            # 유효한 픽셀이 없는 곳은 -999로 설정
+            daily_avg[~mask] = -999
+
+            # 단일 채널로 변환 (모든 채널이 동일하므로)
+            if daily_avg.shape[2] > 1:
+                daily_avg = daily_avg[:, :, 0]
+
+            # TIFF 파일로 저장
+            output_path = os.path.join(daily_avg_dir, coord_key)
+            tiff.imwrite(output_path, daily_avg.astype(np.float32))
+
+        print(f"   ✓ Created {len(patch_files_dict)} daily-averaged patches in {daily_avg_dir}")
+
+        # 8. 평가용 데이터셋 생성 (하루 평균 이미지 사용)
+        print(f"\n[Step 2] Creating evaluation dataset from daily-averaged images...")
         dataset = GOCIEvalDataset(
-            image_dir=time_folder,
+            image_dir=daily_avg_dir,
             land_sea_mask_path=land_sea_mask_path,
             patch_size=256
         )
@@ -624,18 +726,21 @@ if __name__ == '__main__':
             dataset, batch_size=8, shuffle=False, num_workers=8, pin_memory=True
         )
 
-        # 6. 결과 저장 경로 설정
-        result_save_path = os.path.join(base_result, year, date, time)
+        # 9. 결과 저장 경로 설정 (년/월일 구조로 저장)
+        result_save_path = os.path.join(base_result, year, date)
         os.makedirs(result_save_path, exist_ok=True)
-        print(f"[Main] Saving results under: {result_save_path}")
+        print(f"[Main] Saving results to: {result_save_path}")
 
-        # 7. 모델 테스트 실행 (model.py 사용)
+        # 10. 모델 테스트 실행 (model.py 사용)
+        print(f"\n[Step 3] Running model inference on daily-averaged data...")
         model.test(
             test_loader=loader,
             result_save_path=result_save_path
         )
 
         processed_count += 1
-        print(f"[Main] Completed {processed_count}/{len(valid_dates)}")
+        print(f"\n[Main] ✓ Completed {year}/{date} ({processed_count}/{len(dates_by_day)})")
 
-    print(f"\n[Main] All {len(valid_dates)} time periods with ocean missing data processed.")
+    print(f"\n{'='*80}")
+    print(f"[Main] ✓ All {len(dates_by_day)} days processed successfully.")
+    print(f"{'='*80}")

@@ -676,6 +676,17 @@ def validate_with_scatter_plots(date_result_path, out_dir, land_mask_path, sampl
 
     print(f"✅ Scatter plot validation completed for {len(time_data)} time patterns")
 
+    # Calculate R² score
+    from sklearn.metrics import r2_score
+    r2 = r2_score(gt_array, recon_array)
+
+    # Return metrics
+    return {
+        'rmse': rmse,
+        'mae': mae,
+        'r2': r2
+    }
+
 def process_multiple_dates(base_results_dir, base_performance_dir, land_mask_path, target_dates):
     """
     여러 날짜를 일괄 처리하는 함수
@@ -693,6 +704,7 @@ def process_multiple_dates(base_results_dir, base_performance_dir, land_mask_pat
 
     success_count = 0
     failed_dates = []
+    all_metrics = []  # 모든 날짜의 메트릭 저장
 
     for date_str in target_dates:
         print(f"\n{'='*60}")
@@ -730,7 +742,16 @@ def process_multiple_dates(base_results_dir, base_performance_dir, land_mask_pat
 
             # Scatter plot 검증 추가
             scatter_output_path = os.path.join(date_output_path, 'scatter_plots')
-            validate_with_scatter_plots(date_result_path, scatter_output_path, land_mask_path, sample_ratio=0.2)
+            date_metrics = validate_with_scatter_plots(date_result_path, scatter_output_path, land_mask_path, sample_ratio=0.2)
+
+            # 메트릭 저장
+            if date_metrics is not None:
+                all_metrics.append({
+                    'date': date_str,
+                    'rmse': date_metrics['rmse'],
+                    'mae': date_metrics['mae'],
+                    'r2': date_metrics['r2']
+                })
 
             success_count += 1
             print(f"✅ Successfully processed {date_str}")
@@ -755,6 +776,32 @@ def process_multiple_dates(base_results_dir, base_performance_dir, land_mask_pat
 
     if success_count > 0:
         print(f"\nResults saved to: {base_performance_dir}")
+
+    # 전체 평균 메트릭 계산 및 저장
+    if len(all_metrics) > 0:
+        print(f"\n{'='*60}")
+        print(f"OVERALL AVERAGE METRICS ACROSS ALL DATES")
+        print(f"{'='*60}")
+
+        avg_rmse = np.mean([m['rmse'] for m in all_metrics])
+        avg_mae = np.mean([m['mae'] for m in all_metrics])
+        avg_r2 = np.mean([m['r2'] for m in all_metrics])
+
+        print(f"Average RMSE: {avg_rmse:.8f}")
+        print(f"Average MAE: {avg_mae:.8f}")
+        print(f"Average R²: {avg_r2:.6f}")
+
+        # 메트릭을 CSV 파일로 저장
+        metrics_file = os.path.join(base_performance_dir, 'overall_metrics_summary.csv')
+        os.makedirs(base_performance_dir, exist_ok=True)
+
+        with open(metrics_file, 'w') as f:
+            f.write("Date,RMSE,MAE,R2\n")
+            for m in all_metrics:
+                f.write(f"{m['date']},{m['rmse']:.8f},{m['mae']:.8f},{m['r2']:.6f}\n")
+            f.write(f"\nAverage,{avg_rmse:.8f},{avg_mae:.8f},{avg_r2:.6f}\n")
+
+        print(f"✅ Overall metrics saved to: {metrics_file}")
 
 def generate_date_range(start_date: str, end_date: str):
     """

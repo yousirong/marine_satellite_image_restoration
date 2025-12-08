@@ -65,6 +65,59 @@ Rrs연구 복원, Chl-a 복원
 
  - 현재의 fetch 영역을 기준으로 몇 개의 실험 세트를 구성가능 한지, 서해/동해/남해 각각을 몇 개의 실험 구역으로 설정할 것인지, 우리나라 연안을 완전히 커버하기 위해 fetch를 어떻게 분할 해야 하는지 등을 검토해서 연구 영역을 도출하는게 좋다는게 제 의견입니다.
 
+UST21 
+UST21 정확한 위도/경도 정보
+NetCDF 파일에서 추출한 정확한 좌표 정보:
+이미지 경계 좌표
+좌상단 (Upper Left):
+위도: 23.17°N
+경도: 150.855°E
+우하단 (Lower Right):
+위도: 49.1579°N
+경도: 111.604°E
+전체 범위
+위도 범위: 23.17°N ~ 49.1579°N (약 26도)
+경도 범위: 111.604°E ~ 150.855°E (약 39.25도)
+공간 해상도
+위도 해상도: 0.03° (약 3.3 km)
+경도 해상도: 0.03° (약 3.3 km at equator)
+좌표계 정보
+Datum: WGS84
+Geographic CRS: WGS 1984 / UTM
+
+GOCI 정확한 위도/경도 정보
+HDF5 파일에서 추출한 정확한 좌표 정보:
+투영 방식
+투영법: Lambert Conformal Conic (LCC)
+중심 위도: 36.0°N
+중심 경도: 130.0°E
+이미지 경계 좌표 (Geographic Coordinates)
+좌상단 (Upper Left):
+위도: 54.527°N
+경도: 87.909°E
+우상단 (Upper Right):
+위도: 54.527°N
+경도: 172.091°E
+좌하단 (Lower Left):
+위도: 7.125°N
+경도: 107.299°E
+우하단 (Lower Right):
+위도: 7.125°N
+경도: 152.701°E
+전체 범위
+위도 범위: 7.125°N ~ 54.527°N (약 47.4도)
+경도 범위: 87.909°E ~ 172.091°E (약 84.2도)
+이미지 크기 및 해상도
+이미지 크기: 5685 rows × 5567 columns
+총 픽셀 수: 31,648,395 픽셀
+공간 해상도: 약 1.0 km/pixel (투영 좌표 기준)
+투영 좌표 범위 (Projection Coordinates)
+X 범위: -2783 km ~ 2783 km
+Y 범위: -2986 km ~ 2698 km
+비교
+UST21: 23.17°N ~ 49.16°N, 111.60°E ~ 150.86°E (약 250m 해상도)
+GOCI: 7.125°N ~ 54.527°N, 87.909°E ~ 172.091°E (약 1km 해상도)
+
 
 
 ```bash
@@ -81,13 +134,13 @@ python /home/juneyonglee/Desktop/AY_ust/performance/val_goci_fullpatch.py
 
 
 python3 /home/juneyonglee/Desktop/AY_ust/differencemap/Differencemap_OC3GOCIvsUST21.py \
-  --oc3_dir /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/oc3_batch_results \
-  --khoa_dir /home/juneyonglee/Desktop/AY_ust/My_Book/UST21/01_day/2021/01 \
-  --output_dir /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_differencemap_results \
-  --goci_land_mask /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy \
-  --ust_land_mask /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy \
-  --start_date 20210101 \
-  --end_date 20210131
+    --oc3_dir /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/oc3_batch_results_daily \
+    --khoa_dir /home/juneyonglee/Desktop/AY_ust/My_Book/UST21/01_day/2021/01 \
+    --output_dir /home/juneyonglee/Desktop/AY_ust/myhdd/GOCI_RRS/daily_differencemap_results \
+    --goci_land_mask /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy \
+    --ust_land_mask /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy \
+    --start_date 20210101 \
+    --end_date 20210131
 
 
 ### UST21
