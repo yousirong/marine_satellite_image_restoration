@@ -4,14 +4,15 @@ OC3 Algorithm Implementation for GOCI data
 Calculates chlorophyll-a concentration using band 2, 3, and 4 reflectance data
 """
 
-import numpy as np
-import pandas as pd
-import os
-import glob
-from pathlib import Path
-import logging
-from typing import Tuple, Optional, Dict, List
 import argparse
+import csv
+import logging
+import re
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+from PIL import Image
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,16 +23,23 @@ class OC3Processor:
     OC3 Algorithm processor for GOCI satellite data
     """
 
-    def __init__(self, data_root: str, daily_mode: bool = False):
+    def __init__(self,
+                 data_root: str,
+                 daily_mode: bool = False,
+                 performance_root: Optional[str] = None):
         """
         Initialize OC3 processor
 
         Args:
             data_root: Root directory containing GOCI band data
             daily_mode: If True, expects daily-averaged data structure (band2_daily, etc.)
+            performance_root: Optional performance root containing recon_daily and
+                recon_daily_clean PNGs used to build per-date exclusion masks
         """
         self.data_root = Path(data_root)
         self.daily_mode = daily_mode
+        self.performance_root = Path(performance_root) if performance_root else None
+        self._exclusion_mask_cache: Dict[str, np.ndarray] = {}
 
         if daily_mode:
             self.band_dirs = {
@@ -68,7 +76,118 @@ class OC3Processor:
                 logger.error(f"Band directory not found: {band_path}")
                 return False
             logger.info(f"Found {band_name} directory: {band_path}")
+
+        if self.performance_root is not None:
+            if not self.performance_root.exists():
+                logger.error(f"Performance directory not found: {self.performance_root}")
+                return False
+
+            if self.daily_mode:
+                for band_name in self.band_dirs:
+                    performance_band_dir = self.performance_root / f"{band_name}_daily"
+                    if not performance_band_dir.exists():
+                        logger.error(f"Performance band directory not found: {performance_band_dir}")
+                        return False
+
         return True
+
+    def _get_performance_date_dir(self, band_name: str, date: str) -> Path:
+        if self.performance_root is None:
+            raise ValueError("Performance root is not configured")
+
+        if not self.daily_mode:
+            raise ValueError("Performance masking is only supported in daily mode")
+
+        return self.performance_root / f"{band_name}_daily" / f"{date[:4]}_daily" / date
+
+    def _load_rgba_image(self, image_path: Path) -> np.ndarray:
+        if not image_path.exists():
+            raise FileNotFoundError(f"Missing required image: {image_path}")
+
+        try:
+            with Image.open(image_path) as image:
+                return np.array(image.convert('RGBA'))
+        except Exception as exc:
+            raise RuntimeError(f"Unreadable PNG: {image_path}: {exc}") from exc
+
+    def _load_exclusion_mask_for_date(self, date: str) -> Optional[np.ndarray]:
+        if self.performance_root is None:
+            return None
+
+        if date in self._exclusion_mask_cache:
+            return self._exclusion_mask_cache[date]
+
+        combined_mask: Optional[np.ndarray] = None
+        expected_shape: Optional[Tuple[int, int]] = None
+
+        for band_name in ('band2', 'band3', 'band4'):
+            performance_date_dir = self._get_performance_date_dir(band_name, date)
+            recon_path = performance_date_dir / 'recon_daily.png'
+            clean_path = performance_date_dir / 'recon_daily_clean.png'
+
+            recon_image = self._load_rgba_image(recon_path)
+            clean_image = self._load_rgba_image(clean_path)
+
+            if recon_image.shape != clean_image.shape:
+                raise ValueError(
+                    f"Image shape mismatch for {band_name} {date}: "
+                    f"{recon_path} {recon_image.shape} vs {clean_path} {clean_image.shape}"
+                )
+
+            band_shape = recon_image.shape[:2]
+            if expected_shape is None:
+                expected_shape = band_shape
+                combined_mask = np.zeros(expected_shape, dtype=bool)
+            elif band_shape != expected_shape:
+                raise ValueError(
+                    f"Cross-band image shape mismatch for {date}: "
+                    f"expected {expected_shape}, got {band_shape} from {recon_path}"
+                )
+
+            band_mask = (
+                np.all(clean_image[:, :, :3] == 255, axis=2) &
+                np.any(recon_image[:, :, :3] != 255, axis=2)
+            )
+            combined_mask |= band_mask
+
+        if combined_mask is None:
+            raise ValueError(f"Failed to build exclusion mask for {date}")
+
+        self._exclusion_mask_cache[date] = combined_mask
+        return combined_mask
+
+    def _parse_tile_coordinates(self, tile_id: str) -> Tuple[int, int]:
+        match = re.search(r'_y(\d+)_x(\d+)$', tile_id)
+        if match is None:
+            raise ValueError(f"Could not parse tile coordinates from tile id: {tile_id}")
+
+        return int(match.group(1)), int(match.group(2))
+
+    def _get_tile_exclusion_mask(self,
+                                 date: str,
+                                 tile_id: str,
+                                 tile_shape: Tuple[int, int]) -> Optional[np.ndarray]:
+        full_mask = self._load_exclusion_mask_for_date(date)
+        if full_mask is None:
+            return None
+
+        y_start, x_start = self._parse_tile_coordinates(tile_id)
+        tile_height, tile_width = tile_shape
+
+        if y_start >= full_mask.shape[0] or x_start >= full_mask.shape[1]:
+            raise ValueError(
+                f"Tile start is outside exclusion mask bounds for {date} {tile_id}: "
+                f"mask shape {full_mask.shape}"
+            )
+
+        y_end = min(y_start + tile_height, full_mask.shape[0])
+        x_end = min(x_start + tile_width, full_mask.shape[1])
+
+        tile_mask = np.zeros(tile_shape, dtype=bool)
+        mask_slice = full_mask[y_start:y_end, x_start:x_end]
+        tile_mask[:mask_slice.shape[0], :mask_slice.shape[1]] = mask_slice
+
+        return tile_mask
 
     def load_band_data(self, band_path: Path, date: str, time: str, tile_id: str) -> Optional[np.ndarray]:
         """
@@ -97,14 +216,20 @@ class OC3Processor:
             return None
 
         try:
-            # Load CSV data, skip the row index column
-            df = pd.read_csv(csv_path, header=None)
-            data = df.iloc[:, 1:].values  # Skip first column (row indices)
+            data = np.loadtxt(csv_path, delimiter=',', dtype=np.float32)
+            if data.ndim == 1:
+                data = data[np.newaxis, :]
+
+            if data.shape[1] < 2:
+                raise ValueError(f"Unexpected CSV shape {data.shape}")
+
+            # Skip first column (row indices)
+            data = data[:, 1:]
 
             # Normalize data if it's in 0-255 range
-            if data.max() > 1.5:  # If max value > 1.5, assume it's 0-255 range
+            if np.isfinite(data).any() and np.nanmax(data) > 1.5:
                 data = data / 255.0
-                logger.debug(f"Normalized data from 0-255 to 0-1 range")
+                logger.debug("Normalized data from 0-255 to 0-1 range")
 
             logger.debug(f"Loaded data shape: {data.shape} from {csv_path}")
             return data.astype(np.float32)
@@ -217,13 +342,34 @@ class OC3Processor:
         # Calculate chlorophyll concentration
         chlorophyll = self.calculate_chlorophyll_oc3(log_ratio)
 
+        tile_exclusion_mask = self._get_tile_exclusion_mask(date, tile_id, chlorophyll.shape)
+        if tile_exclusion_mask is not None and np.any(tile_exclusion_mask):
+            chlorophyll = chlorophyll.copy()
+            log_ratio = log_ratio.copy()
+            chlorophyll[tile_exclusion_mask] = np.nan
+            log_ratio[tile_exclusion_mask] = np.nan
+
         # Calculate statistics
         valid_mask = ~np.isnan(chlorophyll) & ~np.isinf(chlorophyll)
         valid_chl = chlorophyll[valid_mask]
 
         if len(valid_chl) == 0:
-            logger.warning(f"No valid chlorophyll values for tile {tile_id}")
-            return None
+            logger.info(f"No valid chlorophyll values remain for tile {tile_id}")
+            return {
+                'tile_id': tile_id,
+                'date': date,
+                'time': time,
+                'shape': chlorophyll.shape,
+                'valid_pixels': 0,
+                'total_pixels': chlorophyll.size,
+                'mean_chl': np.nan,
+                'median_chl': np.nan,
+                'std_chl': np.nan,
+                'min_chl': np.nan,
+                'max_chl': np.nan,
+                'chlorophyll_data': chlorophyll,
+                'log_ratio_data': log_ratio
+            }
 
         stats = {
             'tile_id': tile_id,
@@ -354,9 +500,16 @@ class OC3Processor:
                 'max_chl': result['max_chl']
             })
 
-        summary_df = pd.DataFrame(summary_data)
         summary_file = output_path / f'oc3_summary_{date}_{time}.csv'
-        summary_df.to_csv(summary_file, index=False)
+        fieldnames = [
+            'tile_id', 'date', 'time', 'valid_pixels', 'total_pixels',
+            'coverage_percent', 'mean_chl', 'median_chl', 'std_chl',
+            'min_chl', 'max_chl'
+        ]
+        with summary_file.open('w', newline='') as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(summary_data)
         logger.info(f"Saved summary to {summary_file}")
 
         # Save individual tile chlorophyll data

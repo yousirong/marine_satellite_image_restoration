@@ -367,6 +367,7 @@ class Dataset(torch.utils.data.Dataset):
         mask = self.resize(mask, False)
 
         # Ensure the mask is binary
+        # UST21 mask convention: 1=valid, 0=hole (black=hole)
         mask = (mask > 0).astype(np.uint8)  # 0 or 1
 
         # Stack into three channels if needed
@@ -409,7 +410,9 @@ class Dataset(torch.utils.data.Dataset):
     def remove_land_from_mask(self, mask_image, land_sea_mask_patch):
         """
         Remove land areas from the mask and keep only ocean areas.
-        육지 부분을 1로 설정하고 해양 부분은 mask_image 값을 0으로 설정합니다.
+        land_sea_mask_patch: 1=land, 0=sea
+        mask_image: 1=valid, 0=hole
+        Returns: land set to 0 (excluded), sea keeps mask_image.
         """
         # 육지인 부분을 1로 설정하여 복원 불필요
         # 해양인 부분은 기존 mask_image 값을 유지 (복원)

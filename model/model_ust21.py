@@ -264,8 +264,9 @@ class RFRNetModel():
                 fake_degree = fake_B[k].mean(dim=0).cpu().numpy()  # 채널 평균
                 gt_degree = gt_images[k, 1, :, :].cpu().numpy()      # 두 번째 채널 (예시)
 
-                # 기존 mask_degree (원래는 0: 결측, 1: 유효) 추출
+                # 기존 mask_degree (0: 결측/hole, 1: 유효/valid) 추출
                 mask_degree = masks[k, 1, :, :].cpu().numpy()
+                mask_degree = (mask_degree > 0.5).astype(np.uint8)
                 # gt_images의 두 번째 채널을 기준으로 육지와 해양을 구분 (해양: 값 > 0)
                 gt_channel = gt_images[k, 1, :, :].cpu().numpy()
                 ocean_region = (gt_channel > 0)

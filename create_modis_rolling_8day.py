@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MODIS 8-Day Rolling Window Data Processing Script
+MODIS 8-Day Rolling Window Data Processing
 Converts L2 MODIS data to L3m format with 8-day rolling window averaging
 (Days 1-8, 2-9, 3-10, ..., 358-365)
 """
@@ -9,9 +9,6 @@ import os
 import glob
 from datetime import datetime, timedelta
 import logging
-import warnings
-warnings.filterwarnings('ignore')
-
 import numpy as np
 import netCDF4 as nc
 
@@ -36,290 +33,247 @@ LON_MIN = -180.0
 LON_MAX = 180.0
 
 
-class MODIS_L2_to_L3m_Processor:
-    """Process MODIS L2 data to L3m format with 8-day rolling average"""
+def read_l2_file(filepath):
+    """
+    Read L2 MODIS file and extract chlorophyll, lat, lon
+    Returns: chlor_a, lat, lon (or None if error)
+    """
+    try:
+        ds = nc.Dataset(filepath, 'r')
 
-    def __init__(self, l2_dir, output_dir):
-        self.l2_dir = l2_dir
-        self.output_dir = output_dir
-        self.lat_grid = np.linspace(LAT_MAX, LAT_MIN, LAT_SIZE)  # 90 to -90
-        self.lon_grid = np.linspace(LON_MIN, LON_MAX, LON_SIZE)  # -180 to 180
-
-        # Create output directory if not exists
-        os.makedirs(output_dir, exist_ok=True)
-
-        logger.info(f"Initialized processor with L3m grid: {LAT_SIZE}x{LON_SIZE}")
-
-    def get_l2_files_for_year(self, year):
-        """Get all L2 files for a given year, sorted by date"""
-        year_pattern = os.path.join(self.l2_dir, str(year), "*", "*", "AQUA_MODIS.*.L2.OC.nc")
-        files = sorted(glob.glob(year_pattern))
-
-        # Extract date from filename and sort
-        def extract_date(filepath):
-            basename = os.path.basename(filepath)
-            date_str = basename.split('.')[1]  # YYYYMMDDTHHMMSS
-            return date_str[:8]  # YYYYMMDD
-
-        files_with_dates = [(f, extract_date(f)) for f in files]
-        files_with_dates.sort(key=lambda x: x[1])
-
-        logger.info(f"Found {len(files_with_dates)} L2 files for {year}")
-        return files_with_dates
-
-    def read_l2_chlor_a(self, filepath):
-        """
-        Read chlorophyll-a data from L2 NetCDF file
-        Returns: chlor_a (2D array), lat (2D), lon (2D)
-        """
-        try:
-            ds = nc.Dataset(filepath, 'r')
-
-            # Read chlorophyll-a from geophysical_data group
-            if 'geophysical_data' not in ds.groups:
-                ds.close()
-                return None, None, None
-
-            geo = ds.groups['geophysical_data']
-            if 'chlor_a' not in geo.variables:
-                ds.close()
-                return None, None, None
-
-            chlor_a = geo.variables['chlor_a'][:]
-
-            # Read navigation data
-            if 'navigation_data' not in ds.groups:
-                ds.close()
-                return None, None, None
-
-            nav = ds.groups['navigation_data']
-            lat = nav.variables['latitude'][:] if 'latitude' in nav.variables else None
-            lon = nav.variables['longitude'][:] if 'longitude' in nav.variables else None
-
+        # Read geophysical data
+        if 'geophysical_data' not in ds.groups:
             ds.close()
-
-            if lat is None or lon is None:
-                return None, None, None
-
-            return chlor_a, lat, lon
-
-        except Exception as e:
-            logger.error(f"Error reading {filepath}: {e}")
             return None, None, None
 
-    def regrid_l2_to_l3m(self, chlor_a, lat, lon):
-        """
-        Regrid L2 data to L3m grid (4320x8640)
-        Uses nearest neighbor assignment
+        geo = ds.groups['geophysical_data']
+        if 'chlor_a' not in geo.variables:
+            ds.close()
+            return None, None, None
 
-        L2 data has shape (2030, 1354) - each pixel has explicit lat/lon
-        L3m is global 4320x8640 grid
-        """
-        if chlor_a is None or lat is None or lon is None:
-            return None
+        # Read chlorophyll-a (masked array)
+        chlor_a = geo.variables['chlor_a'][:]
 
-        # Initialize L3m grid
-        l3m_grid = np.full((LAT_SIZE, LON_SIZE), np.nan, dtype=np.float32)
-        count_grid = np.zeros((LAT_SIZE, LON_SIZE), dtype=np.int32)
+        # Convert masked array to float with NaN for masked values
+        if np.ma.is_masked(chlor_a):
+            chlor_a = chlor_a.filled(np.nan).astype(np.float32)
+        else:
+            chlor_a = chlor_a.astype(np.float32)
 
-        # Flatten arrays
-        chlor_flat = chlor_a.flatten()
-        lat_flat = lat.flatten()
-        lon_flat = lon.flatten()
+        # Read navigation data
+        if 'navigation_data' not in ds.groups:
+            ds.close()
+            return None, None, None
 
-        # Convert geospatial coordinates to grid indices
-        lat_idx = ((LAT_MAX - lat_flat) / (LAT_MAX - LAT_MIN) * LAT_SIZE).astype(int)
-        lon_idx = ((lon_flat - LON_MIN) / (LON_MAX - LON_MIN) * LON_SIZE).astype(int)
+        nav = ds.groups['navigation_data']
+        lat = nav.variables['latitude'][:]
+        lon = nav.variables['longitude'][:]
 
-        # Filter valid indices and valid chlorophyll values
-        valid_mask = (lat_idx >= 0) & (lat_idx < LAT_SIZE) & \
-                     (lon_idx >= 0) & (lon_idx < LON_SIZE) & \
-                     (chlor_flat > 0) & (chlor_flat <= 100) & \
-                     ~np.isnan(chlor_flat)
+        # Convert masked arrays if needed
+        if np.ma.is_masked(lat):
+            lat = lat.filled(np.nan)
+        if np.ma.is_masked(lon):
+            lon = lon.filled(np.nan)
 
-        valid_lat_idx = lat_idx[valid_mask]
-        valid_lon_idx = lon_idx[valid_mask]
-        valid_chlor = chlor_flat[valid_mask]
+        ds.close()
 
-        # Accumulate values in L3m grid (for averaging)
-        np.add.at(l3m_grid, (valid_lat_idx, valid_lon_idx), valid_chlor)
-        np.add.at(count_grid, (valid_lat_idx, valid_lon_idx), 1)
+        return chlor_a.astype(np.float32), lat.astype(np.float32), lon.astype(np.float32)
 
-        # Average where we have data
-        valid_cells = count_grid > 0
-        l3m_grid[valid_cells] = l3m_grid[valid_cells] / count_grid[valid_cells]
-        l3m_grid[~valid_cells] = np.nan
+    except Exception as e:
+        logger.error(f"Error reading {filepath}: {e}")
+        return None, None, None
 
-        return l3m_grid
 
-    def generate_8day_windows(self, year):
-        """Generate 8-day rolling windows for a year"""
-        start_date = datetime(year, 1, 1)
-        end_date = datetime(year, 12, 31)
+def regrid_l2_to_l3m(chlor_a, lat, lon):
+    """
+    Regrid L2 data to L3m grid using averaging
+    L2 has shape (2030, 1354), L3m is (4320, 8640)
+    """
+    if chlor_a is None:
+        return None
 
-        windows = []
-        current_date = start_date
+    # Initialize accumulators
+    grid_data = np.zeros((LAT_SIZE, LON_SIZE), dtype=np.float64)
+    grid_count = np.zeros((LAT_SIZE, LON_SIZE), dtype=np.uint16)
 
-        while current_date <= end_date - timedelta(days=7):
-            window_end = current_date + timedelta(days=7)
-            windows.append((current_date, window_end))
-            current_date += timedelta(days=1)
+    # Flatten for processing
+    chlor_flat = chlor_a.ravel()
+    lat_flat = lat.ravel()
+    lon_flat = lon.ravel()
 
-        return windows
+    # Calculate grid indices for each data point
+    lat_idx = ((LAT_MAX - lat_flat) / (LAT_MAX - LAT_MIN) * LAT_SIZE).astype(np.int32)
+    lon_idx = ((lon_flat - LON_MIN) / (LON_MAX - LON_MIN) * LON_SIZE).astype(np.int32)
 
-    def process_8day_window(self, year, window_start, window_end, l2_files_with_dates):
-        """
-        Process an 8-day window:
-        1. Collect L2 files within the window
-        2. Regrid each to L3m
-        3. Average the grids
-        4. Save as L3m NetCDF
-        """
-        # Find L2 files in this window
-        window_files = []
-        for filepath, date_str in l2_files_with_dates:
-            file_date = datetime.strptime(date_str, "%Y%m%d")
-            if window_start <= file_date <= window_end:
-                window_files.append((filepath, file_date))
+    # Create validity mask
+    valid = (lat_idx >= 0) & (lat_idx < LAT_SIZE) & \
+            (lon_idx >= 0) & (lon_idx < LON_SIZE) & \
+            (chlor_flat > 0) & (chlor_flat <= 100) & \
+            np.isfinite(chlor_flat)
 
-        if not window_files:
-            return False
+    if not np.any(valid):
+        return None
 
-        logger.info(f"Processing window {window_start.date()} to {window_end.date()} ({len(window_files)} L2 files)")
+    # Extract valid data
+    lat_idx_valid = lat_idx[valid]
+    lon_idx_valid = lon_idx[valid]
+    chlor_valid = chlor_flat[valid]
 
-        # Read and regrid each L2 file
-        l3m_grids = []
+    # Accumulate values in grid using 2D indexing
+    np.add.at(grid_data, (lat_idx_valid, lon_idx_valid), chlor_valid)
+    np.add.at(grid_count, (lat_idx_valid, lon_idx_valid), 1)
 
-        for filepath, _ in window_files:
-            chlor_a, lat, lon = self.read_l2_chlor_a(filepath)
+    # Calculate average
+    grid_result = np.full((LAT_SIZE, LON_SIZE), np.nan, dtype=np.float32)
+    mask = grid_count > 0
+    grid_result[mask] = (grid_data[mask] / grid_count[mask]).astype(np.float32)
+
+    return grid_result
+
+
+def get_l2_files_for_date_range(year, start_date, end_date):
+    """Get all L2 files within date range"""
+    files = []
+    pattern = os.path.join(MODIS_L2_DIR, str(year), "*", "*", "AQUA_MODIS.*.L2.OC.nc")
+
+    for filepath in glob.glob(pattern):
+        basename = os.path.basename(filepath)
+        try:
+            date_str = basename.split('.')[1]  # YYYYMMDDTHHMMSS
+            file_date = datetime.strptime(date_str[:8], "%Y%m%d")
+
+            if start_date <= file_date <= end_date:
+                files.append(filepath)
+        except:
+            continue
+
+    return sorted(files)
+
+
+def save_l3m_file(data, start_date, end_date):
+    """Save data as L3m NetCDF file"""
+    date_str_start = start_date.strftime("%Y%m%d")
+    date_str_end = end_date.strftime("%Y%m%d")
+    filename = f"AQUA_MODIS.{date_str_start}_{date_str_end}.L3m.8D.CHL.chlor_a.4km.nc"
+    filepath = os.path.join(OUTPUT_DIR, filename)
+
+    try:
+        # Create dataset
+        ds = nc.Dataset(filepath, 'w', format='NETCDF4', clobber=True)
+
+        # Create dimensions
+        ds.createDimension('lat', LAT_SIZE)
+        ds.createDimension('lon', LON_SIZE)
+
+        # Create coordinate variables
+        lat_var = ds.createVariable('lat', 'f4', ('lat',), zlib=True)
+        lon_var = ds.createVariable('lon', 'f4', ('lon',), zlib=True)
+
+        lat_var[:] = np.linspace(LAT_MAX, LAT_MIN, LAT_SIZE)
+        lon_var[:] = np.linspace(LON_MIN, LON_MAX, LON_SIZE)
+
+        lat_var.units = 'degrees_north'
+        lat_var.long_name = 'latitude'
+
+        lon_var.units = 'degrees_east'
+        lon_var.long_name = 'longitude'
+
+        # Create data variable (fill_value must be set at creation time)
+        chlor_var = ds.createVariable('chlor_a', 'f4', ('lat', 'lon'),
+                                      zlib=True, complevel=4, fill_value=-32767.0)
+        chlor_var[:] = data
+
+        chlor_var.long_name = 'Chlorophyll a concentration'
+        chlor_var.units = 'mg m^-3'
+        chlor_var.valid_min = 0.001
+        chlor_var.valid_max = 100.0
+
+        # Global attributes
+        ds.title = 'MODIS-Aqua Level-3 Mapped 8-Day Chlorophyll Concentration (Rolling Window)'
+        ds.instrument = 'MODIS'
+        ds.platform = 'Aqua'
+        ds.processing_version = 'Rolling Window 8-Day'
+        ds.temporal_range = '8-day rolling window'
+        ds.spatialResolution = '4 km'
+        ds.map_projection = 'Equidistant Cylindrical'
+        ds.geospatial_lat_min = LAT_MIN
+        ds.geospatial_lat_max = LAT_MAX
+        ds.geospatial_lon_min = LON_MIN
+        ds.geospatial_lon_max = LON_MAX
+        ds.time_coverage_start = start_date.strftime("%Y-%m-%dT00:00:00.000Z")
+        ds.time_coverage_end = end_date.strftime("%Y-%m-%dT23:59:59.999Z")
+
+        ds.close()
+        logger.info(f"Saved: {filename}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Error saving {filepath}: {e}")
+        return False
+
+
+def process_year(year):
+    """Process all 8-day rolling windows for a year"""
+    logger.info(f"=== Processing year {year} ===")
+
+    start_date = datetime(year, 1, 1)
+    end_date = datetime(year, 12, 31)
+
+    # Generate 8-day rolling windows
+    windows = []
+    current = start_date
+    while current + timedelta(days=7) <= end_date:
+        window_end = current + timedelta(days=7)
+        windows.append((current, window_end))
+        current += timedelta(days=1)
+
+    logger.info(f"Generated {len(windows)} 8-day windows")
+
+    success_count = 0
+    for window_start, window_end in windows:
+        # Get L2 files for this window
+        l2_files = get_l2_files_for_date_range(year, window_start, window_end)
+
+        if not l2_files:
+            continue
+
+        logger.info(f"Window {window_start.date()}-{window_end.date()}: {len(l2_files)} L2 files")
+
+        # Process each L2 file and accumulate
+        grids = []
+        for l2_file in l2_files:
+            chlor_a, lat, lon = read_l2_file(l2_file)
             if chlor_a is None:
                 continue
 
-            l3m_grid = self.regrid_l2_to_l3m(chlor_a, lat, lon)
-            if l3m_grid is not None:
-                l3m_grids.append(l3m_grid)
+            grid = regrid_l2_to_l3m(chlor_a, lat, lon)
+            if grid is not None:
+                grids.append(grid)
 
-        if not l3m_grids:
-            logger.warning(f"No valid L2 data for window {window_start.date()}")
-            return False
+        if grids:
+            # Average all grids
+            grids_array = np.array(grids)
+            avg_grid = np.nanmean(grids_array, axis=0).astype(np.float32)
 
-        # Calculate average (ignoring NaN)
-        l3m_stack = np.array(l3m_grids)
-        l3m_average = np.nanmean(l3m_stack, axis=0).astype(np.float32)
-
-        # Save to NetCDF
-        self.save_l3m_netcdf(l3m_average, window_start, window_end, year)
-
-        return True
-
-    def save_l3m_netcdf(self, data, window_start, window_end, year):
-        """Save L3m data to NetCDF file"""
-        # Create filename
-        date_str_start = window_start.strftime("%Y%m%d")
-        date_str_end = window_end.strftime("%Y%m%d")
-        filename = f"AQUA_MODIS.{date_str_start}_{date_str_end}.L3m.8D.CHL.chlor_a.4km.nc"
-        filepath = os.path.join(self.output_dir, filename)
-
-        try:
-            # Create dataset
-            ds = nc.Dataset(filepath, 'w', format='NETCDF4')
-
-            # Create dimensions
-            ds.createDimension('lat', LAT_SIZE)
-            ds.createDimension('lon', LON_SIZE)
-
-            # Create coordinate variables
-            lat_var = ds.createVariable('lat', 'f4', ('lat',))
-            lon_var = ds.createVariable('lon', 'f4', ('lon',))
-
-            lat_var[:] = self.lat_grid
-            lon_var[:] = self.lon_grid
-
-            lat_var.units = 'degrees_north'
-            lat_var.long_name = 'latitude'
-            lat_var.standard_name = 'latitude'
-
-            lon_var.units = 'degrees_east'
-            lon_var.long_name = 'longitude'
-            lon_var.standard_name = 'longitude'
-
-            # Create data variable
-            chlor_var = ds.createVariable('chlor_a', 'f4', ('lat', 'lon'), fill_value=-32767)
-            chlor_var[:] = data
-
-            chlor_var.long_name = 'Chlorophyll a concentration'
-            chlor_var.units = 'mg m^-3'
-            chlor_var.standard_name = 'mass_concentration_of_chlorophyll_a_in_sea_water'
-            chlor_var.valid_min = 0.001
-            chlor_var.valid_max = 100.0
-
-            # Add global attributes
-            ds.setncattr('title', 'MODIS-Aqua Level-3 Mapped 8-Day Chlorophyll Concentration (Rolling Window)')
-            ds.setncattr('instrument', 'MODIS')
-            ds.setncattr('platform', 'Aqua')
-            ds.setncattr('processing_version', 'Rolling 8-Day Window')
-            ds.setncattr('temporal_range', '8-day rolling window')
-            ds.setncattr('spatialResolution', '4 km')
-            ds.setncattr('map_projection', 'Equidistant Cylindrical')
-            ds.setncattr('geospatial_lat_min', LAT_MIN)
-            ds.setncattr('geospatial_lat_max', LAT_MAX)
-            ds.setncattr('geospatial_lon_min', LON_MIN)
-            ds.setncattr('geospatial_lon_max', LON_MAX)
-
-            time_coverage_start = window_start.strftime("%Y-%m-%dT00:00:00.000Z")
-            time_coverage_end = window_end.strftime("%Y-%m-%dT23:59:59.999Z")
-            ds.setncattr('time_coverage_start', time_coverage_start)
-            ds.setncattr('time_coverage_end', time_coverage_end)
-
-            ds.close()
-
-            logger.info(f"Saved: {filename}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Error saving {filepath}: {e}")
-            return False
-
-    def process_year(self, year):
-        """Process all 8-day windows for a year"""
-        logger.info(f"=== Processing year {year} ===")
-
-        # Get all L2 files for this year
-        l2_files = self.get_l2_files_for_year(year)
-        if not l2_files:
-            logger.warning(f"No L2 files found for {year}")
-            return
-
-        # Generate 8-day windows
-        windows = self.generate_8day_windows(year)
-        logger.info(f"Generated {len(windows)} 8-day windows for {year}")
-
-        # Process each window
-        success_count = 0
-        for window_start, window_end in windows:
-            if self.process_8day_window(year, window_start, window_end, l2_files):
+            # Save
+            if save_l3m_file(avg_grid, window_start, window_end):
                 success_count += 1
 
-        logger.info(f"Successfully processed {success_count}/{len(windows)} windows for {year}")
-
-    def process_all_years(self):
-        """Process all years"""
-        for year in YEARS:
-            self.process_year(year)
-
-        logger.info("=== All years processed ===")
+    logger.info(f"Year {year}: {success_count}/{len(windows)} windows processed")
 
 
 def main():
     """Main entry point"""
     logger.info("Starting MODIS L2 to L3m rolling 8-day processing")
-    logger.info(f"Input directory: {MODIS_L2_DIR}")
-    logger.info(f"Output directory: {OUTPUT_DIR}")
+    logger.info(f"Input: {MODIS_L2_DIR}")
+    logger.info(f"Output: {OUTPUT_DIR}")
 
-    processor = MODIS_L2_to_L3m_Processor(MODIS_L2_DIR, OUTPUT_DIR)
-    processor.process_all_years()
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    logger.info("Processing complete!")
+    for year in YEARS:
+        process_year(year)
+
+    logger.info("=== Processing complete ===")
 
 
 if __name__ == "__main__":

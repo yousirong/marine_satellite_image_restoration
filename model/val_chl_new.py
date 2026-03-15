@@ -19,6 +19,8 @@ from PIL import Image
 
 # ust21
 land_sea_mask_path = '/home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.npy'
+# mask CSV convention (see model_ust21.py): 0=hole, 1=valid
+MASK_HOLE_VALUE = 0
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
@@ -486,8 +488,8 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path):
                     continue
 
                 # 해양 영역에서만 마스크 비율 계산
-                # mask_data에서 1 = hole(손실), 0 = valid pixel
-                holes_in_sea = np.sum((mask_data == 1) & sea_area)
+                # mask_data에서 0 = hole(손실), 1 = valid pixel
+                holes_in_sea = np.sum((mask_data == MASK_HOLE_VALUE) & sea_area)
 
                 total_sea_pixels += sea_pixel_count
                 sea_hole_pixels += holes_in_sea
@@ -698,6 +700,11 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path):
     count = 0
     accu_true, accu_pred = [], []
 
+    # hole-only 통계 (mask CSV: 0=hole, 1=valid)
+    total_rmse_hole = total_mae_hole = 0.0
+    count_hole = 0
+    accu_true_hole, accu_pred_hole = [], []
+
     # 컬러맵 생성 카운터
     colormap_created = 0
     colormap_skipped = 0
@@ -770,37 +777,10 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path):
 
         # 통계 계산 (모든 선택된 파일들에 대해)
         valid = (~np.isnan(arr_m)) & (~np.isnan(arr_gt)) & (~np.isnan(arr_rec)) & (arr_gt != 0)
-        if not np.any(valid):
+        hole_valid = (arr_m == MASK_HOLE_VALUE) & (~np.isnan(arr_gt)) & (~np.isnan(arr_rec)) & (arr_gt != 0)
+
+        if not np.any(valid) and not np.any(hole_valid):
             continue
-
-        # Get valid values directly using boolean mask
-        valid_gt = arr_gt[valid]
-        valid_rec = arr_rec[valid]
-
-        diff = valid_gt - valid_rec
-        file_mae = np.mean(np.abs(diff))
-        file_rmse = np.sqrt(np.mean(diff**2))
-        n = len(valid_gt)
-
-        # 전체 통계에 누적
-        total_mae  += np.sum(np.abs(diff))
-        total_rmse += np.sum(diff**2)
-        count += n
-        MAX_ACCUMULATE = 1_000_000
-
-        # Sample for accumulation if needed
-        remaining = MAX_ACCUMULATE - len(accu_true)
-        if remaining > 0 and len(valid_gt) > 0:
-            select_count = min(remaining, len(valid_gt))
-            if select_count < len(valid_gt):
-                # Sample randomly
-                indices = np.random.choice(len(valid_gt), size=select_count, replace=False)
-                accu_true.extend(valid_gt[indices].tolist())
-                accu_pred.extend(valid_rec[indices].tolist())
-            else:
-                # Use all valid values
-                accu_true.extend(valid_gt.tolist())
-                accu_pred.extend(valid_rec.tolist())
 
         # 날짜별 통계 누적
         if file_date not in date_stats:
@@ -810,32 +790,109 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path):
                 'count': 0,
                 'files': 0,
                 'true_vals': [],
-                'pred_vals': []
+                'pred_vals': [],
+                'total_mae_hole': 0.0,
+                'total_rmse_hole': 0.0,
+                'count_hole': 0,
+                'true_vals_hole': [],
+                'pred_vals_hole': []
             }
 
-        date_stats[file_date]['total_mae'] += np.sum(np.abs(diff))
-        date_stats[file_date]['total_rmse'] += np.sum(diff**2)
-        date_stats[file_date]['count'] += n
-        date_stats[file_date]['files'] += 1
-        date_stats[file_date]['true_vals'].extend(valid_gt.tolist())
-        date_stats[file_date]['pred_vals'].extend(valid_rec.tolist())
+        if np.any(valid):
+            # Get valid values directly using boolean mask
+            valid_gt = arr_gt[valid]
+            valid_rec = arr_rec[valid]
 
-    if count == 0:
+            diff = valid_gt - valid_rec
+            file_mae = np.mean(np.abs(diff))
+            file_rmse = np.sqrt(np.mean(diff**2))
+            n = len(valid_gt)
+
+            # 전체 통계에 누적
+            total_mae  += np.sum(np.abs(diff))
+            total_rmse += np.sum(diff**2)
+            count += n
+            MAX_ACCUMULATE = 1_000_000
+
+            # Sample for accumulation if needed
+            remaining = MAX_ACCUMULATE - len(accu_true)
+            if remaining > 0 and len(valid_gt) > 0:
+                select_count = min(remaining, len(valid_gt))
+                if select_count < len(valid_gt):
+                    # Sample randomly
+                    indices = np.random.choice(len(valid_gt), size=select_count, replace=False)
+                    accu_true.extend(valid_gt[indices].tolist())
+                    accu_pred.extend(valid_rec[indices].tolist())
+                else:
+                    # Use all valid values
+                    accu_true.extend(valid_gt.tolist())
+                    accu_pred.extend(valid_rec.tolist())
+
+            date_stats[file_date]['total_mae'] += np.sum(np.abs(diff))
+            date_stats[file_date]['total_rmse'] += np.sum(diff**2)
+            date_stats[file_date]['count'] += n
+            date_stats[file_date]['files'] += 1
+            date_stats[file_date]['true_vals'].extend(valid_gt.tolist())
+            date_stats[file_date]['pred_vals'].extend(valid_rec.tolist())
+
+        if np.any(hole_valid):
+            valid_gt_hole = arr_gt[hole_valid]
+            valid_rec_hole = arr_rec[hole_valid]
+
+            diff_hole = valid_gt_hole - valid_rec_hole
+            n_hole = len(valid_gt_hole)
+
+            total_mae_hole  += np.sum(np.abs(diff_hole))
+            total_rmse_hole += np.sum(diff_hole**2)
+            count_hole += n_hole
+            MAX_ACCUMULATE_HOLE = 1_000_000
+
+            remaining_hole = MAX_ACCUMULATE_HOLE - len(accu_true_hole)
+            if remaining_hole > 0 and len(valid_gt_hole) > 0:
+                select_count_hole = min(remaining_hole, len(valid_gt_hole))
+                if select_count_hole < len(valid_gt_hole):
+                    indices_hole = np.random.choice(len(valid_gt_hole), size=select_count_hole, replace=False)
+                    accu_true_hole.extend(valid_gt_hole[indices_hole].tolist())
+                    accu_pred_hole.extend(valid_rec_hole[indices_hole].tolist())
+                else:
+                    accu_true_hole.extend(valid_gt_hole.tolist())
+                    accu_pred_hole.extend(valid_rec_hole.tolist())
+
+            date_stats[file_date]['total_mae_hole'] += np.sum(np.abs(diff_hole))
+            date_stats[file_date]['total_rmse_hole'] += np.sum(diff_hole**2)
+            date_stats[file_date]['count_hole'] += n_hole
+            date_stats[file_date]['true_vals_hole'].extend(valid_gt_hole.tolist())
+            date_stats[file_date]['pred_vals_hole'].extend(valid_rec_hole.tolist())
+
+    if count == 0 and count_hole == 0:
         print("No valid data for plotting.")
         return
 
     # 전체 통계 계산 및 출력
-    rmse_val = math.sqrt(total_rmse / count)
-    mae_val  = total_mae / count
+    rmse_val = math.sqrt(total_rmse / count) if count > 0 else None
+    mae_val  = total_mae / count if count > 0 else None
+    rmse_val_hole = math.sqrt(total_rmse_hole / count_hole) if count_hole > 0 else None
+    mae_val_hole  = total_mae_hole / count_hole if count_hole > 0 else None
 
     print(f"\n=== Overall Statistics (Top 80% Performance Samples) ===")
     print(f"Actual loss rate used: {loss_rate}%")
     print(f"Selected sample size: {len(selected_performances)} (top 80%)")
     print(f"Total valid pixels: {count:,}")
-    print(f"Overall RMSE: {rmse_val:.6f}")
-    print(f"Overall MAE: {mae_val:.6f}")
+    if rmse_val is not None:
+        print(f"Overall RMSE: {rmse_val:.6f}")
+        print(f"Overall MAE: {mae_val:.6f}")
+    else:
+        print("Overall RMSE/MAE: N/A (no valid pixels)")
     print(f"Color maps created: {colormap_created}")
     print(f"Color maps skipped (low diversity): {colormap_skipped}")
+
+    print(f"\n=== Hole-only Statistics (Mask == {MASK_HOLE_VALUE}) ===")
+    print(f"Hole-only valid pixels: {count_hole:,}")
+    if rmse_val_hole is not None:
+        print(f"Hole-only RMSE: {rmse_val_hole:.6f}")
+        print(f"Hole-only MAE: {mae_val_hole:.6f}")
+    else:
+        print("Hole-only RMSE/MAE: N/A (no hole pixels)")
 
     # 데이터 분포 확인
     print(f"\n=== Data Distribution Check ===")
@@ -863,20 +920,48 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path):
         print(f"accu_true length: {len(accu_true)}")
         print(f"accu_pred length: {len(accu_pred)}")
 
+    # hole-only 데이터 분포 확인
+    print(f"\n=== Hole-only Data Distribution Check ===")
+    print(f"Total hole pixels in plot: {len(accu_true_hole):,}")
+
+    if accu_true_hole and accu_pred_hole:
+        valid_true_hole = [x for x in accu_true_hole if not (math.isnan(x) or math.isinf(x))]
+        valid_pred_hole = [x for x in accu_pred_hole if not (math.isnan(x) or math.isinf(x))]
+
+        if valid_true_hole and valid_pred_hole:
+            print(f"Hole true value range: {min(valid_true_hole):.6f} - {max(valid_true_hole):.6f}")
+            print(f"Hole pred value range: {min(valid_pred_hole):.6f} - {max(valid_pred_hole):.6f}")
+            print(f"Hole true value std: {np.std(valid_true_hole):.6f}")
+            print(f"Hole pred value std: {np.std(valid_pred_hole):.6f}")
+            print(f"Hole valid true values: {len(valid_true_hole):,}/{len(accu_true_hole):,}")
+            print(f"Hole valid pred values: {len(valid_pred_hole):,}/{len(accu_pred_hole):,}")
+        else:
+            print("Warning: No valid numeric values found in hole-only accumulated data")
+            print(f"accu_true_hole sample: {accu_true_hole[:5] if accu_true_hole else 'empty'}")
+            print(f"accu_pred_hole sample: {accu_pred_hole[:5] if accu_pred_hole else 'empty'}")
+    else:
+        print("Warning: No hole-only data accumulated for plotting")
+        print(f"accu_true_hole length: {len(accu_true_hole)}")
+        print(f"accu_pred_hole length: {len(accu_pred_hole)}")
+
     # 날짜별 통계 출력 및 개별 parity plot 생성
     print(f"\n=== Date-wise Statistics ===")
     for date, stats in sorted(date_stats.items()):
+        if stats['count'] <= 0 and stats['count_hole'] <= 0:
+            continue
+
+        print(f"Date {date}:")
+
         if stats['count'] > 0:
             date_rmse = math.sqrt(stats['total_rmse'] / stats['count'])
             date_mae = stats['total_mae'] / stats['count']
 
-            print(f"Date {date}:")
             print(f"  - Files: {stats['files']}")
             print(f"  - Valid pixels: {stats['count']:,}")
             print(f"  - RMSE: {date_rmse:.6f}")
             print(f"  - MAE: {date_mae:.6f}")
 
-            # 날짜별 parity plot 생성
+            # 날짜별 parity plot 생성 (전체 유효 픽셀)
             date_save_path = os.path.join(save_path, f'date_plots_{loss_rate}_top80_performance')
             os.makedirs(date_save_path, exist_ok=True)
 
@@ -895,23 +980,74 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path):
             except Exception as e:
                 print(f"  - Error creating parity plot for {date}: {e}")
 
+        if stats['count_hole'] > 0:
+            date_rmse_hole = math.sqrt(stats['total_rmse_hole'] / stats['count_hole'])
+            date_mae_hole = stats['total_mae_hole'] / stats['count_hole']
+
+            print(f"  - Hole-only pixels: {stats['count_hole']:,}")
+            print(f"  - Hole-only RMSE: {date_rmse_hole:.6f}")
+            print(f"  - Hole-only MAE: {date_mae_hole:.6f}")
+
+            # 날짜별 parity plot 생성 (hole-only)
+            date_save_path_hole = os.path.join(save_path, f'date_plots_{loss_rate}_top80_performance_hole_only')
+            os.makedirs(date_save_path_hole, exist_ok=True)
+
+            try:
+                plot_parity(
+                    filename=date_save_path_hole,
+                    loss_rate=f"{loss_rate}_{date}_top80_hole_only",
+                    true=np.array(stats['true_vals_hole']),
+                    pred=np.array(stats['pred_vals_hole']),
+                    rmse_=date_rmse_hole,
+                    mae_=date_mae_hole,
+                    title=f"Date {date} - Loss {loss_rate}% (Top 80%, Hole-only)",
+                    kind="scatter",
+                    scatter_kws={'s': 1, 'alpha': 0.05}
+                )
+            except Exception as e:
+                print(f"  - Error creating hole-only parity plot for {date}: {e}")
+
     # 전체 parity plot 생성
     print(f"\n=== Creating Overall Parity Plot ===")
-    try:
-        plot_parity(
-            filename=save_path,
-            loss_rate=f"{loss_rate}_overall_top80_performance",
-            true=np.array(accu_true),
-            pred=np.array(accu_pred),
-            rmse_=rmse_val,
-            mae_=mae_val,
-            title=f"Overall - Loss {loss_rate}% (Top 80% Performance)",
-            kind="scatter",
-            scatter_kws={'s': 1, 'alpha': 0.01}
-        )
-        print(f"Overall parity plot saved successfully")
-    except Exception as e:
-        print(f"Error creating overall parity plot: {e}")
+    if count > 0 and accu_true and accu_pred and rmse_val is not None and mae_val is not None:
+        try:
+            plot_parity(
+                filename=save_path,
+                loss_rate=f"{loss_rate}_overall_top80_performance",
+                true=np.array(accu_true),
+                pred=np.array(accu_pred),
+                rmse_=rmse_val,
+                mae_=mae_val,
+                title=f"Overall - Loss {loss_rate}% (Top 80% Performance)",
+                kind="scatter",
+                scatter_kws={'s': 1, 'alpha': 0.01}
+            )
+            print(f"Overall parity plot saved successfully")
+        except Exception as e:
+            print(f"Error creating overall parity plot: {e}")
+    else:
+        print("Skipping overall parity plot (no valid pixels).")
+
+    # hole-only parity plot 생성
+    print(f"\n=== Creating Hole-only Parity Plot ===")
+    if count_hole > 0 and accu_true_hole and accu_pred_hole and rmse_val_hole is not None and mae_val_hole is not None:
+        try:
+            plot_parity(
+                filename=save_path,
+                loss_rate=f"{loss_rate}_overall_top80_performance_hole_only",
+                true=np.array(accu_true_hole),
+                pred=np.array(accu_pred_hole),
+                rmse_=rmse_val_hole,
+                mae_=mae_val_hole,
+                title=f"Overall - Loss {loss_rate}% (Top 80% Performance, Hole-only)",
+                kind="scatter",
+                scatter_kws={'s': 1, 'alpha': 0.01}
+            )
+            print(f"Hole-only parity plot saved successfully")
+        except Exception as e:
+            print(f"Error creating hole-only parity plot: {e}")
+    else:
+        print("Skipping hole-only parity plot (no hole pixels).")
 
     print(f"\n=== Summary ===")
     print(f"Selection method: Top 80% best performing files (by RMSE)")
@@ -923,6 +1059,7 @@ def validate(loss_rate, data_path, save_path, land_sea_mask_path):
     print(f"Results saved to: {save_path}")
     print(f"Color images saved to: {base_color_path} (organized by date)")
     print(f"Date-wise plots saved to: {os.path.join(save_path, f'date_plots_{loss_rate}_top80_performance')}")
+    print(f"Hole-only date-wise plots saved to: {os.path.join(save_path, f'date_plots_{loss_rate}_top80_performance_hole_only')}")
     print(f"RMSE range of top 80%: {min(rmse_values):.6f} - {max(rmse_values):.6f}")
     print(f"MAE range of top 80%: {min(mae_values):.6f} - {max(mae_values):.6f}")
     print(f"Color diversity filter: Created {colormap_created}, Skipped {colormap_skipped}")

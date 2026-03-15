@@ -12,6 +12,7 @@ For both modes:
 """
 
 import numpy as np
+import csv
 from pathlib import Path
 import logging
 from typing import Dict, List, Optional, Tuple
@@ -970,14 +971,15 @@ class DailyAveraging:
             ax1 = fig.add_subplot(gs[0, 0])
             valid_oc3 = oc3_masked[~np.isnan(oc3_masked)]
             if len(valid_oc3) > 0:
-                # For display: set values >=10 to 0, and NaN values to 0
+                # Keep NaN pixels white so excluded clean-mask regions remain visually blank.
                 oc3_display = oc3_masked.copy()
-                oc3_display[oc3_display >= 10.0] = 0.0
-                oc3_display[np.isnan(oc3_display)] = 0.0  # NaN values shown as 0 (dark purple)
+                oc3_display[oc3_display >= 10.0] = np.nan
 
                 vmin_oc3 = 0.0
                 vmax_oc3 = 10.0
-                im1 = ax1.imshow(oc3_display, cmap='viridis',
+                oc3_cmap = plt.get_cmap('viridis').copy()
+                oc3_cmap.set_bad(color='white')
+                im1 = ax1.imshow(np.ma.masked_invalid(oc3_display), cmap=oc3_cmap,
                                 vmin=vmin_oc3, vmax=vmax_oc3, origin='upper', interpolation='nearest',
                                 extent=extent, aspect=aspect_ratio)
                 ax1.set_title(f'OC3 Daily Chlorophyll\n({oc3_data.shape[0]}×{oc3_data.shape[1]})')
@@ -988,7 +990,7 @@ class DailyAveraging:
                 # Overlay land mask as light gray
                 if oc3_land_mask_bool is not None:
                     land_overlay = np.ma.masked_where(~oc3_land_mask_bool,
-                                                     np.ones_like(oc3_land_mask_bool, dtype=float))
+                                                     np.ones_like(oc3_land_mask_bool, dtype=float) * 0.5)
                     ax1.imshow(land_overlay, cmap='gray', vmin=0, vmax=1,
                              origin='upper', interpolation='none', extent=extent, aspect=aspect_ratio, alpha=1.0)
 
@@ -999,7 +1001,9 @@ class DailyAveraging:
                 vmin_khoa = np.nanmin(khoa_masked)
                 vmax_khoa = np.nanmax(khoa_masked)
                 vmax_khoa = max(vmax_khoa, 0.01)
-                im2 = ax2.imshow(khoa_masked, cmap='viridis',
+                khoa_cmap = plt.get_cmap('viridis').copy()
+                khoa_cmap.set_bad(color='white')
+                im2 = ax2.imshow(np.ma.masked_invalid(khoa_masked), cmap=khoa_cmap,
                                 vmin=vmin_khoa, vmax=vmax_khoa, origin='upper', interpolation='nearest',
                                 extent=extent, aspect=aspect_ratio)
                 ax2.set_title(f'KHOA Daily (Aligned to OC3)\n({khoa_aligned.shape[0]}×{khoa_aligned.shape[1]})')
@@ -1302,16 +1306,28 @@ class DailyAveraging:
             return
 
         try:
-            # Read RMSE results
-            import pandas as pd
-            df = pd.read_csv(rmse_csv_path)
+            rmse_values = []
+            with rmse_csv_path.open(newline='') as csv_file:
+                reader = csv.DictReader(csv_file)
+                for row in reader:
+                    if not row:
+                        continue
 
-            if 'rmse' not in df.columns or len(df) == 0:
+                    date_value = (row.get('date') or '').strip()
+                    rmse_value = (row.get('rmse') or '').strip()
+                    if not rmse_value or date_value == 'Average':
+                        continue
+
+                    try:
+                        rmse_values.append(float(rmse_value))
+                    except ValueError:
+                        continue
+
+            if not rmse_values:
                 logger.warning("No RMSE data found in CSV")
                 return
 
-            # Calculate average
-            avg_rmse = df['rmse'].mean()
+            avg_rmse = float(np.mean(rmse_values))
 
             # Append average to CSV
             with open(rmse_csv_path, 'a') as f:

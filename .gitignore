@@ -23,3 +23,5 @@ Notebook/land_sea_mask.npy
 preprocessing_goci_rrs_43to45.log
 daily_results
 differencemap/results
+performance/generated_band_overall_scatter_plots
+testbed/checkpoints

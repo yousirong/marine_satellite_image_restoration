@@ -1,0 +1,57 @@
+# -*- coding: utf-8 -*-
+# GOCI-UST21 Unified Restoration Testbed Configuration
+# =====================================================
+
+# 공통 설정
+common:
+  patch_size: 256
+  batch_size: 8
+  num_workers: 8
+  gpu_ids: [0, 1]
+  output_base: /home/juneyonglee/MyData/testbed_results
+
+# 모델별 설정
+models:
+  goci:
+    enabled: true
+    bands: [2, 3, 4]
+    checkpoints:
+      band2: /home/juneyonglee/Desktop/AY_ust/testbed/checkpoints/goci_band2/best.pth
+      band3: /home/juneyonglee/Desktop/AY_ust/testbed/checkpoints/goci_band3/best.pth
+      band4: /home/juneyonglee/Desktop/AY_ust/testbed/checkpoints/goci_band4/best.pth
+    data:
+      base_path: /home/juneyonglee/Desktop/AY_ust/My_Book1/Preprocessed/GOCI_tiles_daily
+      land_mask: /home/juneyonglee/Desktop/AY_ust/preprocessing/is_land_on_GOCI_modified_1_999.npy
+    preprocessing:
+      missing_values: [-999, 0, 1000]
+      valid_range: [-1000, 1000]
+      min_ocean_ratio: 0.3
+      min_hole_ratio: 0.01
+      max_hole_ratio: 0.95
+    validation:
+      metrics: [rmse, mae, r2]
+      top_percent: 0.95
+      colormap: jet
+
+  ust21:
+    enabled: true
+    checkpoints:
+      chl_8day: /home/juneyonglee/Desktop/AY_ust/testbed/checkpoints/ust21_chl/best.pth
+    data:
+      base_path: /home/juneyonglee/Desktop/AY_ust/My_Book/Preprocessed/UST21_tiles_daily
+      land_mask: /home/juneyonglee/Desktop/AY_ust/preprocessing/Land_mask/Land_mask.mat
+    preprocessing:
+      valid_range: [0.01, 10]
+      min_ocean_ratio: 0.3
+    validation:
+      metrics: [rmse, mae, r2]
+      top_percent: 0.95
+      colormap: jet
+
+# 테스트 범위 설정
+test_scope:
+  years: [2020, 2021]
+  months: null  # null이면 전체 월
+  date_range:
+    start: null  # YYYYMMDD 형식, null이면 자동
+    end: null

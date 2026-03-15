@@ -535,7 +535,7 @@ if __name__ == '__main__':
     # 1. 모델 초기화 (model.py 사용)
     model = RFRNetModel()
     model.initialize_model(
-        path='/home/juneyonglee/Desktop/AY_ust/mydata/5th_years/GOCI_RRS_band4_1day/g_1000000.pth',
+        path='/home/juneyonglee/Desktop/AY_ust/mydata/5th_years/GOCI_RRS_band4_1day/best_model/best.pth',
         train=False,
         gpu_ids=[0, 1]
     )
